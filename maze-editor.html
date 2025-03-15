@@ -1,0 +1,2005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TRS-80 Style Maze Editor</title>
+  <style>
+    :root {
+      --primary-color: #00ff00;
+      --background-color: #121212;
+      --surface-color: #1e1e1e;
+      --surface-color-hover: #2e2e2e;
+      --text-color: #ffffff;
+      --border-color: #444444;
+      --success-color: #4caf50;
+      --error-color: #f44336;
+      --wall-color: #ffffff;
+      --path-color: #000000;
+      --start-color: #2196f3;
+      --exit-color: #4caf50;
+      --grid-color: #333333;
+      --highlight-color: rgba(0, 255, 0, 0.3);
+    }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background-color: var(--background-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      background-color: var(--surface-color);
+      padding: 1rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .editor-container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .settings-panel {
+      width: 300px;
+      background-color: var(--surface-color);
+      border-right: 1px solid var(--border-color);
+      padding: 1rem;
+      overflow-y: auto;
+    }
+
+    .canvas-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      overflow: hidden;
+    }
+
+    #maze-canvas {
+      background-color: #000;
+      border: 2px solid var(--border-color);
+      cursor: crosshair;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: bold;
+      color: var(--primary-color);
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid var(--border-color);
+      background-color: var(--surface-color);
+      color: var(--text-color);
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      background-color: var(--surface-color);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      text-align: center;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    .btn:hover {
+      background-color: var(--surface-color-hover);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn-primary {
+      background-color: var(--primary-color);
+      color: #000;
+      border: none;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .btn-group .btn {
+      flex: 1;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.8);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-content {
+      background-color: var(--surface-color);
+      padding: 2rem;
+      border-radius: 8px;
+      min-width: 300px;
+      max-width: 500px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .close {
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+
+    .modal-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .tool-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 0.5rem;
+      text-align: left;
+      padding: 0.5rem;
+    }
+
+    .tool-btn.active {
+      background-color: var(--highlight-color);
+    }
+
+    .tool-icon {
+      width: 24px;
+      height: 24px;
+      margin-right: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border-color);
+    }
+
+    .alert {
+      padding: 0.5rem;
+      margin-bottom: 1rem;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+    }
+
+    .alert-success {
+      background-color: rgba(76, 175, 80, 0.2);
+      border: 1px solid var(--success-color);
+    }
+
+    .alert-error {
+      background-color: rgba(244, 67, 54, 0.2);
+      border: 1px solid var(--error-color);
+    }
+
+    .status-bar {
+      padding: 0.5rem 1rem;
+      background-color: var(--surface-color);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .grid-size-selector {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    .help-text {
+      font-size: 0.8rem;
+      color: #888;
+      margin-top: 0.25rem;
+    }
+
+    .separator {
+      height: 1px;
+      background-color: var(--border-color);
+      margin: 1rem 0;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .input-group input[type="number"] {
+      width: 60px;
+    }
+
+    .validation-message {
+      margin-top: 1rem;
+      padding: 0.5rem;
+      border-radius: 4px;
+    }
+
+    .validation-success {
+      background-color: rgba(76, 175, 80, 0.2);
+      border: 1px solid var(--success-color);
+    }
+
+    .validation-error {
+      background-color: rgba(244, 67, 54, 0.2);
+      border: 1px solid var(--error-color);
+    }
+
+    .tool-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .zoom-controls {
+      position: absolute;
+      bottom: 1rem;
+      right: 1rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .zoom-btn {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--surface-color);
+      border: 1px solid var(--border-color);
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1.2rem;
+    }
+
+    #position-info {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      background-color: var(--surface-color);
+      padding: 0.5rem;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+    }
+
+    #welcome-modal .modal-content {
+      max-width: 600px;
+    }
+
+    #welcome-modal h2 {
+      color: var(--primary-color);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>TRS-80 Style Maze Editor</h1>
+    <div>
+      <button id="btn-load" class="btn">Load Maze</button>
+      <button id="btn-save" class="btn">Save Maze</button>
+      <button id="btn-help" class="btn">Help</button>
+    </div>
+  </header>
+
+  <div class="editor-container">
+    <div class="settings-panel">
+      <!-- Maze Properties -->
+      <div class="form-group">
+        <label for="maze-name">Maze Name</label>
+        <input type="text" id="maze-name" value="Custom Maze">
+      </div>
+
+      <div class="form-group grid-size-selector">
+        <div>
+          <label for="maze-width">Width</label>
+          <input type="number" id="maze-width" min="5" max="50" value="20">
+        </div>
+        <div>
+          <label for="maze-height">Height</label>
+          <input type="number" id="maze-height" min="5" max="50" value="20">
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button id="btn-create" class="btn btn-primary">Create New Maze</button>
+        <button id="btn-resize" class="btn">Resize</button>
+      </div>
+
+      <!-- Tools Section -->
+      <div class="tool-section">
+        <label>Editing Tools</label>
+        <button class="btn tool-btn active" data-tool="wall">
+          <div class="tool-icon" style="background-color: var(--wall-color);"></div>
+          Wall (W)
+        </button>
+        <button class="btn tool-btn" data-tool="path">
+          <div class="tool-icon" style="background-color: var(--path-color);"></div>
+          Path (P)
+        </button>
+        <button class="btn tool-btn" data-tool="start">
+          <div class="tool-icon" style="background-color: var(--start-color);"></div>
+          Start Point (S)
+        </button>
+        <button class="btn tool-btn" data-tool="exit">
+          <div class="tool-icon" style="background-color: var(--exit-color);"></div>
+          Exit Point (E)
+        </button>
+      </div>
+
+      <!-- Drawing Mode -->
+      <div class="form-group">
+        <label>Drawing Mode</label>
+        <div class="btn-group">
+          <button class="btn tool-btn active" data-mode="cell">Single Cell</button>
+          <button class="btn tool-btn" data-mode="line">Line</button>
+          <button class="btn tool-btn" data-mode="fill">Fill</button>
+        </div>
+      </div>
+
+      <!-- Player Start Position -->
+      <div class="form-group">
+        <label>Player Start Position</label>
+        <div class="input-group">
+          <div>
+            <label for="start-x">X</label>
+            <input type="number" id="start-x" min="1" max="48" value="1">
+          </div>
+          <div>
+            <label for="start-y">Y</label>
+            <input type="number" id="start-y" min="1" max="48" value="1">
+          </div>
+          <div>
+            <label for="start-dir">Direction</label>
+            <select id="start-dir">
+              <option value="0">North</option>
+              <option value="1" selected>East</option>
+              <option value="2">South</option>
+              <option value="3">West</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Exit Position -->
+      <div class="form-group">
+        <label>Exit Position</label>
+        <div class="input-group">
+          <div>
+            <label for="exit-x">X</label>
+            <input type="number" id="exit-x" min="1" max="48" value="18">
+          </div>
+          <div>
+            <label for="exit-y">Y</label>
+            <input type="number" id="exit-y" min="1" max="48" value="18">
+          </div>
+        </div>
+      </div>
+
+      <div class="separator"></div>
+
+      <!-- Maze Actions -->
+      <div class="form-group">
+        <label>Maze Actions</label>
+        <button id="btn-validate" class="btn btn-primary">Validate Maze</button>
+        <button id="btn-clear" class="btn">Clear All</button>
+        <button id="btn-test" class="btn">Test in Game</button>
+      </div>
+
+      <!-- Validation Result -->
+      <div id="validation-result" class="validation-message"></div>
+    </div>
+
+    <div class="canvas-container">
+      <canvas id="maze-canvas" width="600" height="600"></canvas>
+      <div id="position-info">Position: X:0, Y:0</div>
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoom-out">-</button>
+        <button class="zoom-btn" id="zoom-in">+</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <div id="status-message">Ready</div>
+    <div id="canvas-info">Scale: 100%</div>
+  </div>
+
+  <!-- Save Modal -->
+  <div id="save-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Save Maze</h2>
+        <span class="close">&times;</span>
+      </div>
+      <div>
+        <div class="form-group">
+          <label for="save-filename">Filename</label>
+          <input type="text" id="save-filename" value="custom-maze.json">
+          <p class="help-text">The file will be saved in the 'mazes' directory.</p>
+        </div>
+        <div id="save-validation-message"></div>
+      </div>
+      <div class="modal-buttons">
+        <button class="btn" id="btn-cancel-save">Cancel</button>
+        <button class="btn btn-primary" id="btn-confirm-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load Modal -->
+  <div id="load-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Load Maze</h2>
+        <span class="close">&times;</span>
+      </div>
+      <div>
+        <div class="form-group">
+          <label for="maze-file">Select Maze File</label>
+          <select id="maze-file">
+            <option value="">-- Select a maze --</option>
+          </select>
+        </div>
+        <div id="load-message"></div>
+      </div>
+      <div class="modal-buttons">
+        <button class="btn" id="btn-cancel-load">Cancel</button>
+        <button class="btn btn-primary" id="btn-confirm-load">Load</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Welcome Modal -->
+  <div id="welcome-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Welcome to the Maze Editor</h2>
+        <span class="close">&times;</span>
+      </div>
+      <div>
+        <p>This editor allows you to create and modify maze files for the TRS-80 Style Maze game.</p>
+        
+        <h3>Getting Started</h3>
+        <ul>
+          <li>Enter maze dimensions and click "Create New Maze" to generate a random maze</li>
+          <li>Use the editing tools to modify the maze structure</li>
+          <li>Set player start position and exit location</li>
+          <li>Click "Validate Maze" to ensure it's solvable</li>
+          <li>Use "Save Maze" to store your creation</li>
+        </ul>
+        
+        <h3>Keyboard Shortcuts</h3>
+        <ul>
+          <li><strong>W</strong> - Wall tool</li>
+          <li><strong>P</strong> - Path tool</li>
+          <li><strong>S</strong> - Start point tool</li>
+          <li><strong>E</strong> - Exit point tool</li>
+          <li><strong>+/-</strong> - Zoom in/out</li>
+          <li><strong>Ctrl+S</strong> - Save maze</li>
+          <li><strong>Ctrl+O</strong> - Open maze</li>
+        </ul>
+      </div>
+      <div class="modal-buttons">
+        <button class="btn btn-primary" id="btn-welcome-close">Get Started</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * TRS-80 Style Maze Editor
+     * 
+     * This editor allows creating and modifying maze files for the TRS-80 Style Maze game.
+     * It features a graphical editor with various tools for maze creation and modification,
+     * and validates mazes to ensure they're solvable.
+     */
+    document.addEventListener('DOMContentLoaded', function() {
+      // Constants
+      const CELL_TYPES = {
+        WALL: '#',
+        PATH: ' ',
+        EXIT: 'E'
+      };
+
+      const DRAWING_MODES = {
+        CELL: 'cell',
+        LINE: 'line',
+        FILL: 'fill'
+      };
+
+      const TOOLS = {
+        WALL: 'wall',
+        PATH: 'path',
+        START: 'start',
+        EXIT: 'exit'
+      };
+
+      // Editor state
+      const editorState = {
+        maze: null,
+        width: 20,
+        height: 20,
+        selectedTool: TOOLS.WALL,
+        drawingMode: DRAWING_MODES.CELL,
+        playerStart: { x: 1, y: 1, direction: 1 },
+        exit: { x: 18, y: 18 },
+        hasUnsavedChanges: false,
+        isDrawing: false,
+        lastDrawnCell: null,
+        scale: 1,
+        offsetX: 0,
+        offsetY: 0,
+        gridSize: 30, // Base size of a cell in pixels
+        availableMazes: []
+      };
+
+      // DOM elements
+      const canvas = document.getElementById('maze-canvas');
+      const ctx = canvas.getContext('2d');
+      const positionInfo = document.getElementById('position-info');
+      const statusMessage = document.getElementById('status-message');
+      const canvasInfo = document.getElementById('canvas-info');
+      const validationResult = document.getElementById('validation-result');
+      
+      // Modals
+      const saveModal = document.getElementById('save-modal');
+      const loadModal = document.getElementById('load-modal');
+      const welcomeModal = document.getElementById('welcome-modal');
+      
+      // Input fields
+      const mazeNameInput = document.getElementById('maze-name');
+      const mazeWidthInput = document.getElementById('maze-width');
+      const mazeHeightInput = document.getElementById('maze-height');
+      const startXInput = document.getElementById('start-x');
+      const startYInput = document.getElementById('start-y');
+      const startDirInput = document.getElementById('start-dir');
+      const exitXInput = document.getElementById('exit-x');
+      const exitYInput = document.getElementById('exit-y');
+      const saveFilenameInput = document.getElementById('save-filename');
+      const mazeFileSelect = document.getElementById('maze-file');
+
+      // Tool buttons
+      const toolButtons = document.querySelectorAll('.tool-btn[data-tool]');
+      const modeButtons = document.querySelectorAll('.tool-btn[data-mode]');
+
+      // Action buttons
+      const createBtn = document.getElementById('btn-create');
+      const resizeBtn = document.getElementById('btn-resize');
+      const validateBtn = document.getElementById('btn-validate');
+      const clearBtn = document.getElementById('btn-clear');
+      const testBtn = document.getElementById('btn-test');
+      const saveBtn = document.getElementById('btn-save');
+      const loadBtn = document.getElementById('btn-load');
+      const helpBtn = document.getElementById('btn-help');
+      const zoomInBtn = document.getElementById('zoom-in');
+      const zoomOutBtn = document.getElementById('zoom-out');
+
+      // Modal buttons
+      const saveConfirmBtn = document.getElementById('btn-confirm-save');
+      const loadConfirmBtn = document.getElementById('btn-confirm-load');
+      const welcomeCloseBtn = document.getElementById('btn-welcome-close');
+      const closeButtons = document.querySelectorAll('.close');
+      const cancelSaveBtn = document.getElementById('btn-cancel-save');
+      const cancelLoadBtn = document.getElementById('btn-cancel-load');
+
+      /**
+       * Initializes the editor
+       */
+      function init() {
+        setupEventListeners();
+        loadAvailableMazes();
+        showWelcomeModal();
+      }
+
+      /**
+       * Sets up all event listeners for the editor
+       */
+      function setupEventListeners() {
+        // Tool selection
+        toolButtons.forEach(btn => {
+          btn.addEventListener('click', () => {
+            setSelectedTool(btn.dataset.tool);
+          });
+        });
+
+        // Drawing mode selection
+        modeButtons.forEach(btn => {
+          btn.addEventListener('click', () => {
+            setDrawingMode(btn.dataset.mode);
+          });
+        });
+
+        // Canvas interactions
+        canvas.addEventListener('mousedown', handleCanvasMouseDown);
+        canvas.addEventListener('mousemove', handleCanvasMouseMove);
+        canvas.addEventListener('mouseup', handleCanvasMouseUp);
+        canvas.addEventListener('mouseleave', handleCanvasMouseUp);
+        canvas.addEventListener('wheel', handleCanvasWheel);
+
+        // Button actions
+        createBtn.addEventListener('click', createNewMaze);
+        resizeBtn.addEventListener('click', resizeMaze);
+        validateBtn.addEventListener('click', validateMaze);
+        clearBtn.addEventListener('click', clearMaze);
+        testBtn.addEventListener('click', testMaze);
+        saveBtn.addEventListener('click', openSaveModal);
+        loadBtn.addEventListener('click', openLoadModal);
+        helpBtn.addEventListener('click', showWelcomeModal);
+        zoomInBtn.addEventListener('click', () => zoomCanvas(0.1));
+        zoomOutBtn.addEventListener('click', () => zoomCanvas(-0.1));
+
+        // Modal actions
+        saveConfirmBtn.addEventListener('click', saveMaze);
+        loadConfirmBtn.addEventListener('click', loadSelectedMaze);
+        welcomeCloseBtn.addEventListener('click', () => hideModal(welcomeModal));
+        cancelSaveBtn.addEventListener('click', () => hideModal(saveModal));
+        cancelLoadBtn.addEventListener('click', () => hideModal(loadModal));
+        closeButtons.forEach(btn => {
+          btn.addEventListener('click', function() {
+            hideModal(this.closest('.modal'));
+          });
+        });
+
+        // Form input changes
+        mazeWidthInput.addEventListener('change', updateEditorState);
+        mazeHeightInput.addEventListener('change', updateEditorState);
+        startXInput.addEventListener('change', updatePlayerStart);
+        startYInput.addEventListener('change', updatePlayerStart);
+        startDirInput.addEventListener('change', updatePlayerStart);
+        exitXInput.addEventListener('change', updateExitPosition);
+        exitYInput.addEventListener('change', updateExitPosition);
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', handleKeyDown);
+      }
+
+      /**
+       * Handles keyboard shortcuts
+       * @param {KeyboardEvent} e - Keyboard event
+       */
+      function handleKeyDown(e) {
+        // Keyboard shortcuts
+        if (e.key === 'w' || e.key === 'W') {
+          setSelectedTool(TOOLS.WALL);
+        } else if (e.key === 'p' || e.key === 'P') {
+          setSelectedTool(TOOLS.PATH);
+        } else if (e.key === 's' || e.key === 'S') {
+          setSelectedTool(TOOLS.START);
+        } else if (e.key === 'e' || e.key === 'E') {
+          setSelectedTool(TOOLS.EXIT);
+        } else if (e.key === '+' || e.key === '=') {
+          zoomCanvas(0.1);
+        } else if (e.key === '-' || e.key === '_') {
+          zoomCanvas(-0.1);
+        } else if (e.key === 'o' && e.ctrlKey) {
+          e.preventDefault();
+          openLoadModal();
+        } else if (e.key === 's' && e.ctrlKey) {
+          e.preventDefault();
+          openSaveModal();
+        }
+      }
+
+      /**
+       * Sets the currently selected tool
+       * @param {string} tool - The tool to select
+       */
+      function setSelectedTool(tool) {
+        editorState.selectedTool = tool;
+        toolButtons.forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.tool === tool);
+        });
+        updateStatusMessage(`Tool: ${tool.charAt(0).toUpperCase() + tool.slice(1)}`);
+      }
+
+      /**
+       * Sets the current drawing mode
+       * @param {string} mode - The drawing mode to select
+       */
+      function setDrawingMode(mode) {
+        editorState.drawingMode = mode;
+        modeButtons.forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+        updateStatusMessage(`Drawing Mode: ${mode.charAt(0).toUpperCase() + mode.slice(1)}`);
+      }
+
+      /**
+       * Updates the editor state based on input field values
+       */
+      function updateEditorState() {
+        editorState.width = parseInt(mazeWidthInput.value, 10);
+        editorState.height = parseInt(mazeHeightInput.value, 10);
+        
+        // Update exit coordinates if they're outside the new maze
+        if (editorState.exit.x >= editorState.width - 1) {
+          editorState.exit.x = editorState.width - 2;
+          exitXInput.value = editorState.exit.x;
+        }
+        if (editorState.exit.y >= editorState.height - 1) {
+          editorState.exit.y = editorState.height - 2;
+          exitYInput.value = editorState.exit.y;
+        }
+        
+        // Update player start if outside the new maze
+        if (editorState.playerStart.x >= editorState.width - 1) {
+          editorState.playerStart.x = editorState.width - 2;
+          startXInput.value = editorState.playerStart.x;
+        }
+        if (editorState.playerStart.y >= editorState.height - 1) {
+          editorState.playerStart.y = editorState.height - 2;
+          startYInput.value = editorState.playerStart.y;
+        }
+      }
+
+      /**
+       * Updates the player start position based on input fields
+       */
+      function updatePlayerStart() {
+        const x = parseInt(startXInput.value, 10);
+        const y = parseInt(startYInput.value, 10);
+        const direction = parseInt(startDirInput.value, 10);
+        
+        // Validate coordinates
+        if (x >= 1 && x < editorState.width - 1 && 
+            y >= 1 && y < editorState.height - 1) {
+          editorState.playerStart = { x, y, direction };
+          
+          // Ensure start point is a path
+          if (editorState.maze && editorState.maze[y][x] === CELL_TYPES.WALL) {
+            editorState.maze[y][x] = CELL_TYPES.PATH;
+          }
+          
+          drawMaze();
+        } else {
+          // Reset to valid values
+          startXInput.value = editorState.playerStart.x;
+          startYInput.value = editorState.playerStart.y;
+          
+          updateStatusMessage('Start coordinates must be within maze bounds', 'error');
+        }
+      }
+
+      /**
+       * Updates the exit position based on input fields
+       */
+      function updateExitPosition() {
+        const x = parseInt(exitXInput.value, 10);
+        const y = parseInt(exitYInput.value, 10);
+        
+        // Validate coordinates
+        if (x >= 1 && x < editorState.width - 1 && 
+            y >= 1 && y < editorState.height - 1) {
+          editorState.exit = { x, y };
+          
+          // Update the maze if it exists
+          if (editorState.maze) {
+            // Clear any previous exit markers
+            for (let j = 0; j < editorState.height; j++) {
+              for (let i = 0; i < editorState.width; i++) {
+                if (editorState.maze[j][i] === CELL_TYPES.EXIT) {
+                  editorState.maze[j][i] = CELL_TYPES.PATH;
+                }
+              }
+            }
+            
+            // Set the new exit position
+            editorState.maze[y][x] = CELL_TYPES.EXIT;
+            drawMaze();
+          }
+        } else {
+          // Reset to valid values
+          exitXInput.value = editorState.exit.x;
+          exitYInput.value = editorState.exit.y;
+          
+          updateStatusMessage('Exit coordinates must be within maze bounds', 'error');
+        }
+      }
+
+      /**
+       * Creates a new maze with current dimensions
+       */
+      function createNewMaze() {
+        updateEditorState();
+        
+        // Validate dimensions
+        if (editorState.width < 5 || editorState.height < 5 || 
+            editorState.width > 50 || editorState.height > 50) {
+          updateStatusMessage('Maze dimensions must be between 5 and 50', 'error');
+          return;
+        }
+        
+        // Generate a random maze
+        editorState.maze = generateMaze(editorState.width, editorState.height);
+        
+        // Reset zoom and position
+        resetView();
+        
+        // Set exit cell
+        editorState.maze[editorState.exit.y][editorState.exit.x] = CELL_TYPES.EXIT;
+        
+        // Update fields with generated maze properties
+        startXInput.value = editorState.playerStart.x;
+        startYInput.value = editorState.playerStart.y;
+        exitXInput.value = editorState.exit.x;
+        exitYInput.value = editorState.exit.y;
+        
+        drawMaze();
+        validateMaze(true);
+        
+        editorState.hasUnsavedChanges = true;
+        updateStatusMessage('New maze created');
+      }
+
+      /**
+       * Resizes the current maze
+       */
+      function resizeMaze() {
+        // Save current maze dimensions
+        const oldWidth = editorState.width;
+        const oldHeight = editorState.height;
+        
+        // Get new dimensions
+        updateEditorState();
+        const newWidth = editorState.width;
+        const newHeight = editorState.height;
+        
+        if (!editorState.maze) {
+          createNewMaze();
+          return;
+        }
+        
+        // Create new maze with the new dimensions
+        const newMaze = Array(newHeight)
+          .fill()
+          .map(() => Array(newWidth).fill(CELL_TYPES.WALL));
+        
+        // Copy existing maze data to the new maze
+        const copyWidth = Math.min(oldWidth, newWidth);
+        const copyHeight = Math.min(oldHeight, newHeight);
+        
+        for (let y = 0; y < copyHeight; y++) {
+          for (let x = 0; x < copyWidth; x++) {
+            if (y < oldHeight && x < oldWidth) {
+              newMaze[y][x] = editorState.maze[y][x];
+            }
+          }
+        }
+        
+        // Add walls to the boundaries if needed
+        for (let y = 0; y < newHeight; y++) {
+          for (let x = 0; x < newWidth; x++) {
+            if (y === 0 || y === newHeight - 1 || x === 0 || x === newWidth - 1) {
+              newMaze[y][x] = CELL_TYPES.WALL;
+            }
+          }
+        }
+        
+        editorState.maze = newMaze;
+        drawMaze();
+        validateMaze(true);
+        
+        editorState.hasUnsavedChanges = true;
+        updateStatusMessage(`Maze resized to ${newWidth}x${newHeight}`);
+      }
+
+      /**
+       * Clears the current maze (replaces all cells with walls)
+       */
+      function clearMaze() {
+        if (!editorState.maze) return;
+        
+        // Reset the maze to all walls
+        for (let y = 0; y < editorState.height; y++) {
+          for (let x = 0; x < editorState.width; x++) {
+            editorState.maze[y][x] = CELL_TYPES.WALL;
+          }
+        }
+        
+        // Ensure player start position is a path
+        editorState.maze[editorState.playerStart.y][editorState.playerStart.x] = CELL_TYPES.PATH;
+        
+        // Set exit position
+        editorState.maze[editorState.exit.y][editorState.exit.x] = CELL_TYPES.EXIT;
+        
+        drawMaze();
+        editorState.hasUnsavedChanges = true;
+        updateStatusMessage('Maze cleared');
+      }
+
+      /**
+       * Opens the save modal dialog
+       */
+      function openSaveModal() {
+        if (!editorState.maze) {
+          updateStatusMessage('No maze to save', 'error');
+          return;
+        }
+        
+        // Validate maze before saving
+        if (!validateMaze(true)) {
+          if (!confirm('The maze is not valid. Save it anyway?')) {
+            return;
+          }
+        }
+        
+        const filename = mazeNameInput.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') + '.json';
+        saveFilenameInput.value = filename;
+        
+        showModal(saveModal);
+      }
+
+      /**
+       * Saves the current maze to a JSON file
+       */
+      function saveMaze() {
+        if (!editorState.maze) return;
+        
+        const filename = saveFilenameInput.value;
+        if (!filename || !filename.endsWith('.json')) {
+          document.getElementById('save-validation-message').innerHTML = 
+            '<div class="alert alert-error">Filename must end with .json</div>';
+          return;
+        }
+        
+        // Create maze data object
+        const mazeData = {
+          name: mazeNameInput.value,
+          width: editorState.width,
+          height: editorState.height,
+          playerStart: editorState.playerStart,
+          exit: editorState.exit,
+          layout: editorState.maze
+        };
+        
+        // In a real environment, we would use the FileSystem API or server-side code
+        // Since this is a demo, we'll just create a download link
+        const jsonString = JSON.stringify(mazeData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const downloadLink = document.createElement('a');
+        downloadLink.href = url;
+        downloadLink.download = filename;
+        downloadLink.click();
+        
+        URL.revokeObjectURL(url);
+        
+        hideModal(saveModal);
+        editorState.hasUnsavedChanges = false;
+        updateStatusMessage(`Maze saved as ${filename}`);
+        
+        // Update available mazes list
+        loadAvailableMazes();
+      }
+
+      /**
+       * Opens the load maze modal dialog
+       */
+      function openLoadModal() {
+        loadAvailableMazes();
+        showModal(loadModal);
+      }
+
+      /**
+       * Loads available maze files and populates the selection dropdown
+       */
+      function loadAvailableMazes() {
+        // In a real environment, we would fetch this from the server
+        // For this demo, we'll use a fixed set of mazes
+        const mazes = [
+          { name: 'Default Maze', file: 'default.json' },
+          { name: 'Spiral Maze', file: 'spiral.json' },
+          { name: 'Complex Maze', file: 'complex.json' }
+        ];
+        
+        editorState.availableMazes = mazes;
+        
+        // Clear existing options except the first one
+        while (mazeFileSelect.options.length > 1) {
+          mazeFileSelect.remove(1);
+        }
+        
+        // Add maze options
+        mazes.forEach(maze => {
+          const option = document.createElement('option');
+          option.value = maze.file;
+          option.textContent = maze.name;
+          mazeFileSelect.appendChild(option);
+        });
+      }
+
+      /**
+       * Loads the selected maze from the file selection dropdown
+       */
+      function loadSelectedMaze() {
+        const selectedFile = mazeFileSelect.value;
+        if (!selectedFile) {
+          document.getElementById('load-message').innerHTML = 
+            '<div class="alert alert-error">Please select a maze</div>';
+          return;
+        }
+        
+        // Check for unsaved changes
+        if (editorState.hasUnsavedChanges) {
+          if (!confirm('You have unsaved changes. Load new maze anyway?')) {
+            return;
+          }
+        }
+        
+        // In a real environment, we would fetch the maze file from the server
+        // For this demo, we'll simulate loading predefined mazes
+        fetch(`mazes/${selectedFile}`)
+          .then(response => response.json())
+          .then(mazeData => {
+            loadMazeFromData(mazeData);
+            hideModal(loadModal);
+          })
+          .catch(error => {
+            document.getElementById('load-message').innerHTML = 
+              `<div class="alert alert-error">Error loading maze: ${error.message}</div>`;
+          });
+      }
+
+      /**
+       * Loads a maze from the provided data object
+       * @param {Object} mazeData - The maze data to load
+       */
+      function loadMazeFromData(mazeData) {
+        editorState.width = mazeData.width;
+        editorState.height = mazeData.height;
+        editorState.playerStart = mazeData.playerStart;
+        editorState.exit = mazeData.exit;
+        editorState.maze = mazeData.layout;
+        
+        // Update input fields
+        mazeNameInput.value = mazeData.name || 'Custom Maze';
+        mazeWidthInput.value = mazeData.width;
+        mazeHeightInput.value = mazeData.height;
+        startXInput.value = mazeData.playerStart.x;
+        startYInput.value = mazeData.playerStart.y;
+        startDirInput.value = mazeData.playerStart.direction;
+        exitXInput.value = mazeData.exit.x;
+        exitYInput.value = mazeData.exit.y;
+        
+        resetView();
+        drawMaze();
+        validateMaze(true);
+        
+        editorState.hasUnsavedChanges = false;
+        updateStatusMessage(`Maze loaded: ${mazeData.name || 'Unnamed Maze'}`);
+      }
+
+      /**
+       * Tests the maze by opening it in the game
+       */
+      function testMaze() {
+        if (!editorState.maze) {
+          updateStatusMessage('No maze to test', 'error');
+          return;
+        }
+        
+        // Check if the maze is valid
+        if (!validateMaze(true)) {
+          alert('The maze must be valid to test it. Please fix any errors and try again.');
+          return;
+        }
+        
+        // Create maze data
+        const mazeData = {
+          name: mazeNameInput.value,
+          width: editorState.width,
+          height: editorState.height,
+          playerStart: editorState.playerStart,
+          exit: editorState.exit,
+          layout: editorState.maze
+        };
+        
+        // Convert to JSON string and save to localStorage for the game to use
+        localStorage.setItem('testMaze', JSON.stringify(mazeData));
+        
+        // Open the game in a new window/tab
+        window.open('index.html?testMaze=true', '_blank');
+      }
+
+      /**
+       * Validates the current maze
+       * @param {boolean} [silent=false] - Whether to display the validation result
+       * @returns {boolean} Whether the maze is valid
+       */
+      function validateMaze(silent = false) {
+        if (!editorState.maze) {
+          if (!silent) {
+            updateStatusMessage('No maze to validate', 'error');
+            validationResult.textContent = 'No maze to validate';
+            validationResult.className = 'validation-message validation-error';
+          }
+          return false;
+        }
+        
+        const errors = [];
+        
+        // Check if all boundaries are walls
+        for (let x = 0; x < editorState.width; x++) {
+          if (editorState.maze[0][x] !== CELL_TYPES.WALL) {
+            errors.push('Top boundary must contain only walls');
+          }
+          if (editorState.maze[editorState.height - 1][x] !== CELL_TYPES.WALL) {
+            errors.push('Bottom boundary must contain only walls');
+          }
+        }
+        
+        for (let y = 0; y < editorState.height; y++) {
+          if (editorState.maze[y][0] !== CELL_TYPES.WALL) {
+            errors.push('Left boundary must contain only walls');
+          }
+          if (editorState.maze[y][editorState.width - 1] !== CELL_TYPES.WALL) {
+            errors.push('Right boundary must contain only walls');
+          }
+        }
+        
+        // Check if start point is on a path
+        const { x: startX, y: startY } = editorState.playerStart;
+        if (editorState.maze[startY][startX] === CELL_TYPES.WALL) {
+          errors.push('Player start position must be on a path, not a wall');
+        }
+        
+        // Check if exit point is marked
+        const { x: exitX, y: exitY } = editorState.exit;
+        if (editorState.maze[exitY][exitX] !== CELL_TYPES.EXIT) {
+          errors.push('Exit position must be marked with "E"');
+          // Auto-fix this issue
+          editorState.maze[exitY][exitX] = CELL_TYPES.EXIT;
+        }
+        
+        // Check if maze is solvable
+        if (!isMazeSolvable()) {
+          errors.push('Maze must have a path from start to exit');
+        }
+        
+        if (errors.length === 0) {
+          if (!silent) {
+            updateStatusMessage('Maze is valid', 'success');
+            validationResult.textContent = 'Maze is valid and solvable';
+            validationResult.className = 'validation-message validation-success';
+          }
+          return true;
+        } else {
+          if (!silent) {
+            updateStatusMessage('Maze has validation errors', 'error');
+            validationResult.innerHTML = '<strong>Validation Errors:</strong><ul>' + 
+              errors.map(err => `<li>${err}</li>`).join('') + '</ul>';
+            validationResult.className = 'validation-message validation-error';
+          }
+          return false;
+        }
+      }
+
+      /**
+       * Checks if the maze is solvable from start to exit using BFS
+       * @returns {boolean} Whether the maze is solvable
+       */
+      function isMazeSolvable() {
+        if (!editorState.maze) return false;
+        
+        const { x: startX, y: startY } = editorState.playerStart;
+        const { x: exitX, y: exitY } = editorState.exit;
+        
+        // Create a visited map
+        const visited = Array(editorState.height)
+          .fill()
+          .map(() => Array(editorState.width).fill(false));
+        
+        // Queue for BFS
+        const queue = [{ x: startX, y: startY }];
+        visited[startY][startX] = true;
+        
+        // Directions for neighbors (up, right, down, left)
+        const directions = [
+          { dx: 0, dy: -1 },
+          { dx: 1, dy: 0 },
+          { dx: 0, dy: 1 },
+          { dx: -1, dy: 0 }
+        ];
+        
+        while (queue.length > 0) {
+          const current = queue.shift();
+          
+          // Check if we reached the exit
+          if (current.x === exitX && current.y === exitY) {
+            return true;
+          }
+          
+          // Check all neighbors
+          for (const dir of directions) {
+            const nx = current.x + dir.dx;
+            const ny = current.y + dir.dy;
+            
+            // Skip if out of bounds or already visited
+            if (nx < 0 || nx >= editorState.width || ny < 0 || ny >= editorState.height || 
+                visited[ny][nx]) {
+              continue;
+            }
+            
+            // Skip walls
+            if (editorState.maze[ny][nx] === CELL_TYPES.WALL) {
+              continue;
+            }
+            
+            // Add to queue
+            visited[ny][nx] = true;
+            queue.push({ x: nx, y: ny });
+          }
+        }
+        
+        // If we exhausted the queue without finding the exit, the maze is not solvable
+        return false;
+      }
+
+      /**
+       * Shows the welcome modal dialog
+       */
+      function showWelcomeModal() {
+        showModal(welcomeModal);
+      }
+
+      /**
+       * Shows a modal dialog
+       * @param {HTMLElement} modal - The modal element to show
+       */
+      function showModal(modal) {
+        modal.style.display = 'flex';
+      }
+
+      /**
+       * Hides a modal dialog
+       * @param {HTMLElement} modal - The modal element to hide
+       */
+      function hideModal(modal) {
+        modal.style.display = 'none';
+      }
+
+      /**
+       * Updates the status message
+       * @param {string} message - The message to display
+       * @param {string} [type='info'] - The message type (info, success, error)
+       */
+      function updateStatusMessage(message, type = 'info') {
+        statusMessage.textContent = message;
+        
+        // Reset class
+        statusMessage.className = '';
+        
+        // Add class based on type
+        if (type === 'error') {
+          statusMessage.classList.add('error');
+          console.error(message);
+        } else if (type === 'success') {
+          statusMessage.classList.add('success');
+        }
+      }
+
+      /**
+       * Handle mouse down on the canvas
+       * @param {MouseEvent} e - Mouse event
+       */
+      function handleCanvasMouseDown(e) {
+        if (!editorState.maze) return;
+        
+        editorState.isDrawing = true;
+        
+        const { cellX, cellY } = getCellCoordinates(e);
+        
+        // Apply the current tool
+        applyTool(cellX, cellY);
+        
+        // Store last drawn cell for line drawing
+        editorState.lastDrawnCell = { x: cellX, y: cellY };
+      }
+
+      /**
+       * Handle mouse move on the canvas
+       * @param {MouseEvent} e - Mouse event
+       */
+      function handleCanvasMouseMove(e) {
+        const { cellX, cellY } = getCellCoordinates(e);
+        
+        // Update position info
+        positionInfo.textContent = `Position: X:${cellX}, Y:${cellY}`;
+        
+        // Draw if mouse is down
+        if (editorState.isDrawing && editorState.maze) {
+          const { lastDrawnCell } = editorState;
+          
+          if (editorState.drawingMode === DRAWING_MODES.CELL) {
+            // Single cell mode - draw on current cell
+            applyTool(cellX, cellY);
+          } else if (editorState.drawingMode === DRAWING_MODES.LINE && lastDrawnCell) {
+            // Line mode - draw line from last cell to current cell
+            const points = getLinePoints(lastDrawnCell.x, lastDrawnCell.y, cellX, cellY);
+            for (const point of points) {
+              applyTool(point.x, point.y);
+            }
+          }
+          
+          // Update last drawn cell
+          editorState.lastDrawnCell = { x: cellX, y: cellY };
+        }
+      }
+
+      /**
+       * Handle mouse up on the canvas
+       * @param {MouseEvent} e - Mouse event
+       */
+      function handleCanvasMouseUp(e) {
+        if (editorState.isDrawing && editorState.drawingMode === DRAWING_MODES.FILL) {
+          const { cellX, cellY } = getCellCoordinates(e);
+          fillArea(cellX, cellY);
+        }
+        
+        editorState.isDrawing = false;
+        editorState.lastDrawnCell = null;
+      }
+
+      /**
+       * Handle mouse wheel on the canvas
+       * @param {WheelEvent} e - Wheel event
+       */
+      function handleCanvasWheel(e) {
+        e.preventDefault();
+        
+        // Zoom in/out based on wheel direction
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        zoomCanvas(delta);
+      }
+
+      /**
+       * Converts mouse coordinates to cell coordinates
+       * @param {MouseEvent} e - Mouse event
+       * @returns {Object} The cell coordinates
+       */
+      function getCellCoordinates(e) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        
+        // Get mouse position relative to canvas
+        const mouseX = (e.clientX - rect.left) * scaleX;
+        const mouseY = (e.clientY - rect.top) * scaleY;
+        
+        // Convert to cell coordinates accounting for zoom and pan
+        const scaledGridSize = editorState.gridSize * editorState.scale;
+        const cellX = Math.floor((mouseX - editorState.offsetX) / scaledGridSize);
+        const cellY = Math.floor((mouseY - editorState.offsetY) / scaledGridSize);
+        
+        return { cellX, cellY };
+      }
+
+      /**
+       * Applies the current tool at the specified cell coordinates
+       * @param {number} x - Cell X coordinate
+       * @param {number} y - Cell Y coordinate
+       */
+      function applyTool(x, y) {
+        // Skip if out of bounds
+        if (x < 0 || x >= editorState.width || y < 0 || y >= editorState.height) {
+          return;
+        }
+        
+        // Skip boundary cells
+        if (x === 0 || x === editorState.width - 1 || y === 0 || y === editorState.height - 1) {
+          return;
+        }
+        
+        let changed = false;
+        
+        switch (editorState.selectedTool) {
+          case TOOLS.WALL:
+            if (editorState.maze[y][x] !== CELL_TYPES.WALL) {
+              // Don't overwrite start or exit
+              if ((x === editorState.playerStart.x && y === editorState.playerStart.y) ||
+                  (x === editorState.exit.x && y === editorState.exit.y)) {
+                return;
+              }
+              editorState.maze[y][x] = CELL_TYPES.WALL;
+              changed = true;
+            }
+            break;
+            
+          case TOOLS.PATH:
+            if (editorState.maze[y][x] !== CELL_TYPES.PATH) {
+              // Don't overwrite exit
+              if (x === editorState.exit.x && y === editorState.exit.y) {
+                return;
+              }
+              editorState.maze[y][x] = CELL_TYPES.PATH;
+              changed = true;
+            }
+            break;
+            
+          case TOOLS.START:
+            // Update player start position
+            if (editorState.maze[y][x] === CELL_TYPES.WALL) {
+              editorState.maze[y][x] = CELL_TYPES.PATH;
+            }
+            
+            editorState.playerStart.x = x;
+            editorState.playerStart.y = y;
+            
+            // Update input fields
+            startXInput.value = x;
+            startYInput.value = y;
+            
+            changed = true;
+            break;
+            
+          case TOOLS.EXIT:
+            // Clear previous exit
+            for (let j = 0; j < editorState.height; j++) {
+              for (let i = 0; i < editorState.width; i++) {
+                if (editorState.maze[j][i] === CELL_TYPES.EXIT) {
+                  editorState.maze[j][i] = CELL_TYPES.PATH;
+                }
+              }
+            }
+            
+            // Set new exit
+            editorState.maze[y][x] = CELL_TYPES.EXIT;
+            editorState.exit.x = x;
+            editorState.exit.y = y;
+            
+            // Update input fields
+            exitXInput.value = x;
+            exitYInput.value = y;
+            
+            changed = true;
+            break;
+        }
+        
+        if (changed) {
+          drawMaze();
+          editorState.hasUnsavedChanges = true;
+        }
+      }
+
+      /**
+       * Fills an area with the current tool (flood fill algorithm)
+       * @param {number} startX - Starting X coordinate
+       * @param {number} startY - Starting Y coordinate
+       */
+      function fillArea(startX, startY) {
+        if (!editorState.maze) return;
+        
+        // Skip if out of bounds
+        if (startX < 0 || startX >= editorState.width || 
+            startY < 0 || startY >= editorState.height) {
+          return;
+        }
+        
+        // Skip boundary cells
+        if (startX === 0 || startX === editorState.width - 1 || 
+            startY === 0 || startY === editorState.height - 1) {
+          return;
+        }
+        
+        // Determine the target and replacement values
+        let targetValue;
+        let replacementValue;
+        
+        switch (editorState.selectedTool) {
+          case TOOLS.WALL:
+            targetValue = CELL_TYPES.PATH;
+            replacementValue = CELL_TYPES.WALL;
+            break;
+            
+          case TOOLS.PATH:
+            targetValue = CELL_TYPES.WALL;
+            replacementValue = CELL_TYPES.PATH;
+            break;
+            
+          default:
+            return; // Fill only works with wall and path tools
+        }
+        
+        // Skip if starting cell doesn't match target value
+        if (editorState.maze[startY][startX] !== targetValue) {
+          return;
+        }
+        
+        // Queue for BFS flood fill
+        const queue = [{ x: startX, y: startY }];
+        const visited = new Set();
+        visited.add(`${startX},${startY}`);
+        
+        while (queue.length > 0) {
+          const { x, y } = queue.shift();
+          
+          // Replace the value
+          editorState.maze[y][x] = replacementValue;
+          
+          // Check neighbors
+          const neighbors = [
+            { x: x + 1, y },
+            { x: x - 1, y },
+            { x, y: y + 1 },
+            { x, y: y - 1 }
+          ];
+          
+          for (const neighbor of neighbors) {
+            const { x: nx, y: ny } = neighbor;
+            
+            // Skip if out of bounds or boundary
+            if (nx <= 0 || nx >= editorState.width - 1 || 
+                ny <= 0 || ny >= editorState.height - 1) {
+              continue;
+            }
+            
+            // Skip if already visited
+            const key = `${nx},${ny}`;
+            if (visited.has(key)) {
+              continue;
+            }
+            
+            // Skip special cells (start, exit)
+            if ((nx === editorState.playerStart.x && ny === editorState.playerStart.y) ||
+                (nx === editorState.exit.x && ny === editorState.exit.y)) {
+              continue;
+            }
+            
+            // Add to queue if matches target value
+            if (editorState.maze[ny][nx] === targetValue) {
+              visited.add(key);
+              queue.push({ x: nx, y: ny });
+            }
+          }
+        }
+        
+        // Redraw maze and mark as changed
+        drawMaze();
+        editorState.hasUnsavedChanges = true;
+      }
+
+      /**
+       * Calculates points on a line between two cells
+       * @param {number} x0 - Starting X coordinate
+       * @param {number} y0 - Starting Y coordinate
+       * @param {number} x1 - Ending X coordinate
+       * @param {number} y1 - Ending Y coordinate
+       * @returns {Array} Array of points on the line
+       */
+      function getLinePoints(x0, y0, x1, y1) {
+        const points = [];
+        
+        // Bresenham's line algorithm
+        const dx = Math.abs(x1 - x0);
+        const dy = Math.abs(y1 - y0);
+        const sx = x0 < x1 ? 1 : -1;
+        const sy = y0 < y1 ? 1 : -1;
+        let err = dx - dy;
+        
+        while (true) {
+          points.push({ x: x0, y: y0 });
+          
+          if (x0 === x1 && y0 === y1) break;
+          
+          const e2 = 2 * err;
+          if (e2 > -dy) {
+            err -= dy;
+            x0 += sx;
+          }
+          if (e2 < dx) {
+            err += dx;
+            y0 += sy;
+          }
+        }
+        
+        return points;
+      }
+
+      /**
+       * Resets the view (zoom and pan)
+       */
+      function resetView() {
+        editorState.scale = 1;
+        editorState.offsetX = 0;
+        editorState.offsetY = 0;
+        
+        // Calculate best fit for the maze
+        const maxCells = Math.max(editorState.width, editorState.height);
+        const maxDimension = Math.min(canvas.width, canvas.height);
+        
+        editorState.gridSize = Math.floor(maxDimension / maxCells);
+        
+        // Center the maze
+        const totalWidth = editorState.width * editorState.gridSize;
+        const totalHeight = editorState.height * editorState.gridSize;
+        
+        editorState.offsetX = (canvas.width - totalWidth) / 2;
+        editorState.offsetY = (canvas.height - totalHeight) / 2;
+        
+        canvasInfo.textContent = `Scale: 100%`;
+      }
+
+      /**
+       * Zoom the canvas view
+       * @param {number} delta - Amount to zoom (positive = zoom in, negative = zoom out)
+       */
+      function zoomCanvas(delta) {
+        const oldScale = editorState.scale;
+        
+        // Adjust scale with limits
+        editorState.scale = Math.max(0.5, Math.min(3, editorState.scale + delta));
+        
+        // If scale didn't change, exit
+        if (oldScale === editorState.scale) return;
+        
+        // Adjust pan to maintain center point
+        const scaleRatio = editorState.scale / oldScale;
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        
+        editorState.offsetX = centerX - (centerX - editorState.offsetX) * scaleRatio;
+        editorState.offsetY = centerY - (centerY - editorState.offsetY) * scaleRatio;
+        
+        // Update scale info
+        canvasInfo.textContent = `Scale: ${Math.round(editorState.scale * 100)}%`;
+        
+        // Redraw maze
+        drawMaze();
+      }
+
+      /**
+       * Draws the maze on the canvas
+       */
+      function drawMaze() {
+        if (!editorState.maze) return;
+        
+        // Clear canvas
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Calculate cell size with scale
+        const cellSize = editorState.gridSize * editorState.scale;
+        
+        // Draw grid
+        ctx.strokeStyle = 'var(--grid-color)';
+        ctx.lineWidth = 1;
+        
+        for (let x = 0; x <= editorState.width; x++) {
+          ctx.beginPath();
+          ctx.moveTo(
+            editorState.offsetX + x * cellSize,
+            editorState.offsetY
+          );
+          ctx.lineTo(
+            editorState.offsetX + x * cellSize,
+            editorState.offsetY + editorState.height * cellSize
+          );
+          ctx.stroke();
+        }
+        
+        for (let y = 0; y <= editorState.height; y++) {
+          ctx.beginPath();
+          ctx.moveTo(
+            editorState.offsetX,
+            editorState.offsetY + y * cellSize
+          );
+          ctx.lineTo(
+            editorState.offsetX + editorState.width * cellSize,
+            editorState.offsetY + y * cellSize
+          );
+          ctx.stroke();
+        }
+        
+        // Draw cells
+        for (let y = 0; y < editorState.height; y++) {
+          for (let x = 0; x < editorState.width; x++) {
+            const cell = editorState.maze[y][x];
+            
+            const rectX = editorState.offsetX + x * cellSize;
+            const rectY = editorState.offsetY + y * cellSize;
+            
+            // Fill cell based on type
+            if (cell === CELL_TYPES.WALL) {
+              ctx.fillStyle = 'var(--wall-color)';
+              ctx.fillRect(rectX, rectY, cellSize, cellSize);
+            } else if (cell === CELL_TYPES.EXIT) {
+              ctx.fillStyle = 'var(--exit-color)';
+              ctx.fillRect(rectX, rectY, cellSize, cellSize);
+              
+              // Draw 'E' letter
+              ctx.fillStyle = 'black';
+              ctx.font = `${cellSize * 0.7}px monospace`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText('E', rectX + cellSize / 2, rectY + cellSize / 2);
+            }
+          }
+        }
+        
+        // Draw player start position
+        const { x: startX, y: startY, direction } = editorState.playerStart;
+        const startRectX = editorState.offsetX + startX * cellSize;
+        const startRectY = editorState.offsetY + startY * cellSize;
+        
+        // Draw player marker
+        ctx.fillStyle = 'var(--start-color)';
+        ctx.fillRect(startRectX, startRectY, cellSize, cellSize);
+        
+        // Draw direction indicator (arrow)
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        
+        const centerX = startRectX + cellSize / 2;
+        const centerY = startRectY + cellSize / 2;
+        const arrowSize = cellSize * 0.4;
+        
+        switch (direction) {
+          case 0: // North
+            ctx.moveTo(centerX, centerY - arrowSize);
+            ctx.lineTo(centerX - arrowSize * 0.5, centerY + arrowSize * 0.5);
+            ctx.lineTo(centerX + arrowSize * 0.5, centerY + arrowSize * 0.5);
+            break;
+          case 1: // East
+            ctx.moveTo(centerX + arrowSize, centerY);
+            ctx.lineTo(centerX - arrowSize * 0.5, centerY - arrowSize * 0.5);
+            ctx.lineTo(centerX - arrowSize * 0.5, centerY + arrowSize * 0.5);
+            break;
+          case 2: // South
+            ctx.moveTo(centerX, centerY + arrowSize);
+            ctx.lineTo(centerX - arrowSize * 0.5, centerY - arrowSize * 0.5);
+            ctx.lineTo(centerX + arrowSize * 0.5, centerY - arrowSize * 0.5);
+            break;
+          case 3: // West
+            ctx.moveTo(centerX - arrowSize, centerY);
+            ctx.lineTo(centerX + arrowSize * 0.5, centerY - arrowSize * 0.5);
+            ctx.lineTo(centerX + arrowSize * 0.5, centerY + arrowSize * 0.5);
+            break;
+        }
+        
+        ctx.closePath();
+        ctx.fill();
+        
+        // Draw border
+        ctx.strokeStyle = 'var(--border-color)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          editorState.offsetX,
+          editorState.offsetY,
+          editorState.width * cellSize,
+          editorState.height * cellSize
+        );
+      }
+
+      /**
+       * Generates a random maze using the Depth-First Search algorithm with guaranteed path to exit
+       * @param {number} width - Width of the maze
+       * @param {number} height - Height of the maze
+       * @returns {Array} 2D array representing the maze
+       */
+      function generateMaze(width, height) {
+        // Initialize maze with all walls
+        const maze = Array(height)
+          .fill()
+          .map(() => Array(width).fill(CELL_TYPES.WALL));
+        
+        // Define start and exit points
+        const startX = 1;
+        const startY = 1;
+        const exitX = width - 2;
+        const exitY = height - 2;
+        
+        // Mark start position
+        maze[startY][startX] = CELL_TYPES.PATH;
+        
+        // Create a visited set
+        const visited = new Set();
+        visited.add(`${startX},${startY}`);
+        
+        // First, ensure there's a path from start to exit
+        ensurePathExists(maze, startX, startY, exitX, exitY, visited, width, height);
+        
+        // Then, fill in the rest of the maze with the regular algorithm
+        fillRemainingMaze(maze, visited, width, height);
+        
+        // Set exit cell
+        maze[exitY][exitX] = CELL_TYPES.EXIT;
+        
+        // Set player start and exit positions
+        editorState.playerStart = { x: startX, y: startY, direction: 1 };
+        editorState.exit = { x: exitX, y: exitY };
+        
+        return maze;
+      }
+
+      /**
+       * Ensures a path exists from start to exit
+       * @param {Array} maze - The maze being generated
+       * @param {number} startX - Starting X position
+       * @param {number} startY - Starting Y position
+       * @param {number} exitX - Exit X position
+       * @param {number} exitY - Exit Y position
+       * @param {Set} visited - Set of visited cells
+       * @param {number} width - Maze width
+       * @param {number} height - Maze height
+       * @returns {boolean} Whether a path was successfully created
+       */
+      function ensurePathExists(maze, startX, startY, exitX, exitY, visited, width, height) {
+        // If we've reached close to the exit, make a direct connection
+        if (Math.abs(startX - exitX) <= 2 && Math.abs(startY - exitY) <= 2) {
+          // Carve a straight path to the exit
+          const dx = exitX - startX;
+          const dy = exitY - startY;
+          
+          if (dx !== 0) {
+            // Horizontal connection
+            const stepX = dx > 0 ? 1 : -1;
+            for (let x = startX + stepX; x !== exitX + stepX; x += stepX) {
+              maze[startY][x] = CELL_TYPES.PATH;
+              visited.add(`${x},${startY}`);
+            }
+          }
+          
+          if (dy !== 0) {
+            // Vertical connection
+            const stepY = dy > 0 ? 1 : -1;
+            for (let y = startY + stepY; y !== exitY + stepY; y += stepY) {
+              maze[y][exitX] = CELL_TYPES.PATH;
+              visited.add(`${exitX},${y}`);
+            }
+          }
+          
+          return true;
+        }
+        
+        // Directions: up, right, down, left
+        const directions = [
+          { dx: 0, dy: -2 },
+          { dx: 2, dy: 0 },
+          { dx: 0, dy: 2 },
+          { dx: -2, dy: 0 }
+        ];
+        
+        // Sort directions by how much closer they get us to the exit
+        directions.sort((a, b) => {
+          const distA = Math.abs((startX + a.dx) - exitX) + Math.abs((startY + a.dy) - exitY);
+          const distB = Math.abs((startX + b.dx) - exitX) + Math.abs((startY + b.dy) - exitY);
+          return distA - distB;
+        });
+        
+        for (const dir of directions) {
+          const nx = startX + dir.dx;
+          const ny = startY + dir.dy;
+          
+          // Skip if out of bounds or already visited
+          if (nx <= 0 || nx >= width - 1 || ny <= 0 || ny >= height - 1 || 
+              visited.has(`${nx},${ny}`)) {
+            continue;
+          }
+          
+          // Carve the path
+          maze[startY + dir.dy/2][startX + dir.dx/2] = CELL_TYPES.PATH;
+          maze[ny][nx] = CELL_TYPES.PATH;
+          visited.add(`${nx},${ny}`);
+          
+          // Recursively continue path finding
+          if (ensurePathExists(maze, nx, ny, exitX, exitY, visited, width, height)) {
+            return true;
+          }
+        }
+        
+        return false;
+      }
+
+      /**
+       * Fills in the rest of the maze with random paths
+       * @param {Array} maze - The maze being generated
+       * @param {Set} visited - Set of cells already visited
+       * @param {number} width - Maze width
+       * @param {number} height - Maze height
+       */
+      function fillRemainingMaze(maze, visited, width, height) {
+        // Convert visited set to stack of cells
+        const stack = Array.from(visited).map(coord => {
+          const [x, y] = coord.split(',').map(Number);
+          return { x, y };
+        });
+        
+        while (stack.length > 0) {
+          const current = stack[stack.length - 1];
+          
+          // Directions: up, right, down, left
+          const directions = [
+            { dx: 0, dy: -2 },
+            { dx: 2, dy: 0 },
+            { dx: 0, dy: 2 },
+            { dx: -2, dy: 0 }
+          ];
+          
+          // Randomly shuffle directions
+          for (let i = directions.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [directions[i], directions[j]] = [directions[j], directions[i]];
+          }
+          
+          // Find unvisited neighbors
+          const neighbors = [];
+          
+          for (const dir of directions) {
+            const nx = current.x + dir.dx;
+            const ny = current.y + dir.dy;
+            
+            if (nx > 0 && nx < width - 1 && ny > 0 && ny < height - 1 && 
+                !visited.has(`${nx},${ny}`)) {
+              neighbors.push({
+                x: nx,
+                y: ny,
+                dx: dir.dx,
+                dy: dir.dy
+              });
+            }
+          }
+          
+          if (neighbors.length > 0) {
+            // Choose random neighbor
+            const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+            
+            // Carve path
+            maze[current.y + next.dy/2][current.x + next.dx/2] = CELL_TYPES.PATH;
+            maze[next.y][next.x] = CELL_TYPES.PATH;
+            
+            // Mark as visited and add to stack
+            visited.add(`${next.x},${next.y}`);
+            stack.push({ x: next.x, y: next.y });
+          } else {
+            // Backtrack
+            stack.pop();
+          }
+        }
+      }
+
+      // Initialize the editor
+      init();
+    });
+  </script>
+</body>
+</html>

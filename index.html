@@ -54,9 +54,84 @@
         border: 1px solid #444;
         border-radius: 4px;
       }
+      #mazeSelector {
+        margin-bottom: 20px;
+        background-color: #333;
+        color: white;
+        font-family: monospace;
+        padding: 8px;
+        border: 1px solid #666;
+        border-radius: 4px;
+      }
+      #startScreen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+      }
+      #startScreen h1 {
+        color: #0f0;
+        margin-bottom: 30px;
+        text-shadow: 0 0 10px #0f0;
+      }
+      .maze-option {
+        background-color: #222;
+        border: 1px solid #444;
+        color: white;
+        padding: 10px 15px;
+        margin: 5px;
+        cursor: pointer;
+        width: 300px;
+        text-align: center;
+        transition: all 0.3s;
+      }
+      .maze-option:hover {
+        background-color: #444;
+        border-color: #0f0;
+      }
+      .maze-list {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 20px;
+      }
+      .option-group {
+        margin-top: 30px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .option-title {
+        margin-bottom: 10px;
+        color: #0f0;
+      }
+      .generate-option {
+        background-color: #333;
+        margin-top: 30px;
+      }
     </style>
   </head>
   <body>
+    <div id="startScreen">
+      <h1>TRS-80 STYLE MAZE EXPLORER</h1>
+      <div class="option-group">
+        <div class="option-title">SELECT A MAZE:</div>
+        <div class="maze-list" id="mazeList">
+          <!-- Maze options will be added here by JavaScript -->
+        </div>
+      </div>
+      <div class="maze-option generate-option" id="generateRandomMaze">
+        GENERATE RANDOM MAZE
+      </div>
+    </div>
+
     <div id="gameContainer">
       <canvas id="mazeView" width="640" height="400"></canvas>
       <div id="textArea">Welcome to the Maze. Use arrow keys to navigate.</div>
@@ -68,24 +143,52 @@
       <div id="exitsDisplay">Checking exits...</div>
     </div>
 
-    <div class="info">TRS-80 Style Maze Generator • Use arrow keys to move</div>
+    <div class="info">TRS-80 Style Maze Explorer • Use arrow keys to move</div>
 
     <script>
       // Maze Generator and Game Logic
       class MazeGame {
-        constructor(width, height) {
-          this.width = width;
-          this.height = height;
-          this.maze = this.generateMaze(width, height);
-          this.player = {
-            x: 1,
-            y: 1,
-            direction: 0, // 0 = North, 1 = East, 2 = South, 3 = West
-          };
-          this.exit = {
-            x: width - 2,
-            y: height - 2,
-          };
+        constructor(options = {}) {
+          this.isCustomMaze = !!options.mazeData;
+          
+          if (this.isCustomMaze) {
+            // Load from custom maze data
+            const mazeData = options.mazeData;
+            this.width = mazeData.width;
+            this.height = mazeData.height;
+            this.maze = mazeData.layout;
+            
+            // Set player start position
+            this.player = {
+              x: mazeData.playerStart.x,
+              y: mazeData.playerStart.y,
+              direction: mazeData.playerStart.direction
+            };
+            
+            // Set exit position
+            this.exit = {
+              x: mazeData.exit.x,
+              y: mazeData.exit.y
+            };
+            
+            // Ensure exit is marked in the maze
+            this.maze[this.exit.y][this.exit.x] = "E";
+          } else {
+            // Generate random maze
+            this.width = options.width || 20;
+            this.height = options.height || 20;
+            this.maze = this.generateMaze(this.width, this.height);
+            this.player = {
+              x: 1,
+              y: 1,
+              direction: 0, // 0 = North, 1 = East, 2 = South, 3 = West
+            };
+            this.exit = {
+              x: this.width - 2,
+              y: this.height - 2,
+            };
+          }
+          
           this.canvas = document.getElementById("mazeView");
           this.ctx = this.canvas.getContext("2d");
           this.minimapCanvas = document.getElementById("minimap");
@@ -100,35 +203,128 @@
           this.animationStartTime = 0;
           this.animationDuration = 300; // milliseconds
           this.lastFrameTime = 0;
-          this.targetX = 1;
-          this.targetY = 1;
-          this.startX = 1;
-          this.startY = 1;
-          this.startDirection = 0;
-          this.targetDirection = 0;
+          this.targetX = this.player.x;
+          this.targetY = this.player.y;
+          this.startX = this.player.x;
+          this.startY = this.player.y;
+          this.startDirection = this.player.direction;
+          this.targetDirection = this.player.direction;
 
           this.setupEventListeners();
           this.render();
         }
 
-        // Maze Generation using Depth-First Search
+        // Maze Generation using Depth-First Search with guaranteed solution
         generateMaze(width, height) {
           // Initialize maze with all walls
           let maze = Array(height)
             .fill()
             .map(() => Array(width).fill("#"));
 
-          // Create a starting point
-          let startX = 1;
-          let startY = 1;
+          // Define start and exit points
+          const startX = 1;
+          const startY = 1;
+          const exitX = width - 2;
+          const exitY = height - 2;
+
+          // Mark the start position
           maze[startY][startX] = " ";
 
-          // DFS to create paths
-          const stack = [{ x: startX, y: startY }];
+          // Use a modified DFS algorithm to ensure a path from start to exit
+          const visited = new Set();
+          visited.add(`${startX},${startY}`);
+          
+          // First, ensure there's a path from start to exit
+          this.ensurePathExists(maze, startX, startY, exitX, exitY, visited, width, height);
+          
+          // Then, fill in the rest of the maze with random paths
+          this.fillRemainingMaze(maze, visited, width, height);
 
+          // Set exit cell
+          maze[exitY][exitX] = "E";
+
+          return maze;
+        }
+        
+        // Helper method to ensure a path exists from start to exit
+        ensurePathExists(maze, startX, startY, exitX, exitY, visited, width, height) {
+          // If we've reached very close to the exit, make the final connection
+          if (Math.abs(startX - exitX) <= 2 && Math.abs(startY - exitY) <= 2) {
+            // Make a direct path to the exit
+            const dx = exitX - startX;
+            const dy = exitY - startY;
+            
+            // Carve a straight path
+            if (dx !== 0) {
+              // Horizontal connection
+              const stepX = dx > 0 ? 1 : -1;
+              for (let x = startX + stepX; x !== exitX + stepX; x += stepX) {
+                maze[startY][x] = " ";
+                visited.add(`${x},${startY}`);
+              }
+            }
+            
+            if (dy !== 0) {
+              // Vertical connection
+              const stepY = dy > 0 ? 1 : -1;
+              for (let y = startY + stepY; y !== exitY + stepY; y += stepY) {
+                maze[y][exitX] = " ";
+                visited.add(`${exitX},${y}`);
+              }
+            }
+            
+            return true;
+          }
+          
+          // Directions to try, prioritizing moving towards the exit
+          const directions = [
+            { dx: 0, dy: -2 }, // Up
+            { dx: 2, dy: 0 },  // Right
+            { dx: 0, dy: 2 },  // Down
+            { dx: -2, dy: 0 }  // Left
+          ];
+          
+          // Sort directions based on how much closer they get us to the exit
+          directions.sort((a, b) => {
+            const distA = Math.abs((startX + a.dx) - exitX) + Math.abs((startY + a.dy) - exitY);
+            const distB = Math.abs((startX + b.dx) - exitX) + Math.abs((startY + b.dy) - exitY);
+            return distA - distB;
+          });
+          
+          for (const dir of directions) {
+            const nx = startX + dir.dx;
+            const ny = startY + dir.dy;
+            
+            // Skip if out of bounds or already visited
+            if (!this.isValidCell(nx, ny, width, height) || visited.has(`${nx},${ny}`)) {
+              continue;
+            }
+            
+            // Carve the path
+            maze[startY + dir.dy/2][startX + dir.dx/2] = " ";
+            maze[ny][nx] = " ";
+            visited.add(`${nx},${ny}`);
+            
+            // Recursively continue path finding
+            if (this.ensurePathExists(maze, nx, ny, exitX, exitY, visited, width, height)) {
+              return true;
+            }
+          }
+          
+          return false;
+        }
+        
+        // Helper method to fill in the rest of the maze with random paths
+        fillRemainingMaze(maze, visited, width, height) {
+          // Standard DFS algorithm to fill in the rest of the maze
+          const stack = Array.from(visited).map(coord => {
+            const [x, y] = coord.split(',').map(Number);
+            return { x, y };
+          });
+          
           while (stack.length > 0) {
             const current = stack[stack.length - 1];
-
+            
             // Check neighbors (up, right, down, left)
             const neighbors = [];
             const directions = [
@@ -137,18 +333,16 @@
               { dx: 0, dy: 2 }, // Down
               { dx: -2, dy: 0 }, // Left
             ];
-
+            
             for (const dir of directions) {
               const nx = current.x + dir.dx;
               const ny = current.y + dir.dy;
-
+              
               // Check if neighbor is valid and unvisited
               if (
-                nx > 0 &&
-                nx < width - 1 &&
-                ny > 0 &&
-                ny < height - 1 &&
-                maze[ny][nx] === "#"
+                this.isValidCell(nx, ny, width, height) &&
+                maze[ny][nx] === "#" &&
+                !visited.has(`${nx},${ny}`)
               ) {
                 neighbors.push({
                   x: nx,
@@ -158,16 +352,18 @@
                 });
               }
             }
-
+            
             if (neighbors.length > 0) {
               // Choose a random neighbor
-              const next =
-                neighbors[Math.floor(Math.random() * neighbors.length)];
-
+              const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+              
               // Create path between current and next
               maze[current.y + next.dy][current.x + next.dx] = " ";
               maze[next.y][next.x] = " ";
-
+              
+              // Mark as visited
+              visited.add(`${next.x},${next.y}`);
+              
               // Push next cell to stack
               stack.push({ x: next.x, y: next.y });
             } else {
@@ -175,11 +371,11 @@
               stack.pop();
             }
           }
-
-          // Set exit
-          maze[height - 2][width - 2] = "E";
-
-          return maze;
+        }
+        
+        // Helper method to check if a cell position is valid within the maze
+        isValidCell(x, y, width, height) {
+          return x > 0 && x < width - 1 && y > 0 && y < height - 1;
         }
 
         // Handle key presses
@@ -853,9 +1049,138 @@
         }
       }
 
+      // Maze loader and startup functionality
+      class MazeLoader {
+        constructor() {
+          this.availableMazes = [];
+          this.startScreen = document.getElementById("startScreen");
+          this.mazeList = document.getElementById("mazeList");
+          this.generateButton = document.getElementById("generateRandomMaze");
+          
+          this.setupEventListeners();
+          this.loadAvailableMazes();
+        }
+        
+        setupEventListeners() {
+          this.generateButton.addEventListener("click", () => {
+            this.startGame();
+          });
+        }
+        
+        async loadAvailableMazes() {
+          try {
+            // Prefefined list of maze files to load
+            const mazeFiles = [
+              { name: "Default Maze", path: "mazes/default.json" },
+              { name: "Spiral Maze", path: "mazes/spiral.json" },
+              { name: "Complex Maze", path: "mazes/complex.json" }
+            ];
+            
+            for (const mazeInfo of mazeFiles) {
+              try {
+                const response = await fetch(mazeInfo.path);
+                if (response.ok) {
+                  const mazeData = await response.json();
+                  this.availableMazes.push({
+                    name: mazeData.name || mazeInfo.name,
+                    data: mazeData,
+                    path: mazeInfo.path
+                  });
+                }
+              } catch (error) {
+                console.error(`Error loading maze ${mazeInfo.path}:`, error);
+              }
+            }
+            
+            this.displayAvailableMazes();
+          } catch (error) {
+            console.error("Error loading mazes:", error);
+          }
+        }
+        
+        displayAvailableMazes() {
+          // Clear existing options
+          this.mazeList.innerHTML = "";
+          
+          // Add each maze as an option
+          this.availableMazes.forEach(maze => {
+            const option = document.createElement("div");
+            option.className = "maze-option";
+            option.textContent = maze.name;
+            option.addEventListener("click", () => {
+              this.startGame(maze.data);
+            });
+            this.mazeList.appendChild(option);
+          });
+          
+          // Add message if no mazes found
+          if (this.availableMazes.length === 0) {
+            const message = document.createElement("div");
+            message.textContent = "No custom mazes found. Use the generate option below.";
+            message.style.color = "#aaa";
+            message.style.padding = "10px";
+            this.mazeList.appendChild(message);
+          }
+        }
+        
+        startGame(mazeData = null) {
+          // Hide start screen
+          this.startScreen.style.display = "none";
+          
+          // Create the game
+          let game;
+          if (mazeData) {
+            game = new MazeGame({ mazeData });
+          } else {
+            game = new MazeGame({ width: 20, height: 20 });
+          }
+          
+          // Store the game instance
+          window.currentGame = game;
+        }
+      }
+
       // Create and start the game when the page loads
       window.onload = function () {
-        const game = new MazeGame(20, 20);
+        // Check if there's a test maze in localStorage (from editor)
+        const testMazeParam = new URLSearchParams(window.location.search).get('testMaze');
+        
+        if (testMazeParam === 'true' && localStorage.getItem('testMaze')) {
+          try {
+            const mazeData = JSON.parse(localStorage.getItem('testMaze'));
+            // Create game directly with the test maze
+            window.currentGame = new MazeGame({ mazeData });
+            
+            // Show notification about test mode
+            const notification = document.createElement('div');
+            notification.style.position = 'fixed';
+            notification.style.top = '10px';
+            notification.style.left = '50%';
+            notification.style.transform = 'translateX(-50%)';
+            notification.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+            notification.style.color = '#0f0';
+            notification.style.padding = '10px 20px';
+            notification.style.borderRadius = '5px';
+            notification.style.fontFamily = 'monospace';
+            notification.style.zIndex = '1000';
+            notification.textContent = 'Testing custom maze from editor';
+            document.body.appendChild(notification);
+            
+            // Remove notification after 5 seconds
+            setTimeout(() => {
+              notification.style.opacity = '0';
+              notification.style.transition = 'opacity 1s';
+              setTimeout(() => notification.remove(), 1000);
+            }, 5000);
+          } catch (error) {
+            console.error('Error loading test maze:', error);
+            // Fall back to normal loader
+            const loader = new MazeLoader();
+          }
+        } else {
+          // Normal game startup with maze loader
+          const loader = new MazeLoader();
+        }
       };
     </script>
   </body>

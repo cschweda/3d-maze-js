@@ -102,3 +102,6 @@ public
 *.swp
 *.swo
 .DS_Store
+
+# DO NOT ignore maze files (they're part of the project)
+!mazes/*.json

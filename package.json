@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node tests/run-tests.js",
+    "test:mazes": "node tests/validate-maze.js",
+    "test:generator": "node tests/test-maze-generator.js",
+    "test:rendering": "node tests/test-rendering.js",
     "start": "npx serve"
   },
   "keywords": ["maze", "game", "canvas", "javascript", "retro"],

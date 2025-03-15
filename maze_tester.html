@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Maze Tester</title>
+    <style>
+      body {
+        background-color: #111;
+        color: #0f0;
+        font-family: monospace;
+        margin: 0;
+        padding: 20px;
+      }
+
+      h1 {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+
+      .maze-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 20px;
+      }
+
+      .maze-card {
+        background-color: #1a1a1a;
+        border: 2px solid #333;
+        padding: 15px;
+        border-radius: 8px;
+        width: 300px;
+        transition: transform 0.2s, border-color 0.2s;
+      }
+
+      .maze-card:hover {
+        transform: translateY(-5px);
+        border-color: #0f0;
+      }
+
+      .maze-title {
+        font-size: 16px;
+        margin: 0 0 10px 0;
+        color: #0f0;
+      }
+
+      .maze-info {
+        font-size: 12px;
+        color: #aaa;
+        margin-bottom: 10px;
+      }
+
+      .maze-preview {
+        background-color: black;
+        height: 200px;
+        position: relative;
+        overflow: hidden;
+        border: 1px solid #333;
+      }
+
+      .maze-cell {
+        position: absolute;
+        box-sizing: border-box;
+      }
+
+      .test-button {
+        margin-top: 10px;
+        background-color: #222;
+        color: #0f0;
+        border: 1px solid #0f0;
+        padding: 8px 15px;
+        cursor: pointer;
+        font-family: monospace;
+        width: 100%;
+        transition: background-color 0.2s;
+      }
+
+      .test-button:hover {
+        background-color: #333;
+      }
+
+      .stats {
+        margin-top: 30px;
+        text-align: center;
+        padding: 15px;
+        background-color: #1a1a1a;
+        border-radius: 8px;
+      }
+
+      .stats-title {
+        color: #0f0;
+        margin-bottom: 10px;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 10px;
+      }
+
+      .stat-item {
+        background-color: #222;
+        padding: 10px;
+        border-radius: 4px;
+      }
+
+      #loading {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        color: #0f0;
+        font-size: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>TRS-80 Style Maze Tester</h1>
+
+    <div id="stats" class="stats">
+      <div class="stats-title">MAZE STATISTICS</div>
+      <div class="stats-grid">
+        <div class="stat-item">Total mazes: <span id="totalMazes">0</span></div>
+        <div class="stat-item">Smallest: <span id="smallestMaze">-</span></div>
+        <div class="stat-item">Largest: <span id="largestMaze">-</span></div>
+        <div class="stat-item">
+          Average size: <span id="averageSize">-</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="maze-container" id="mazeContainer">
+      <!-- Mazes will be generated here -->
+    </div>
+
+    <div id="loading">Loading maze data...</div>
+
+    <script>
+      // Load all available maze files
+      const mazeFiles = [
+        "mazes/tiny.json",
+        "mazes/small.json",
+        "mazes/medium.json",
+        "mazes/large.json",
+        "mazes/huge.json",
+        "mazes/spiral.json",
+        "mazes/complex.json",
+        "mazes/simple.json",
+        "mazes/multi_exit.json",
+      ];
+
+      // Track statistics
+      const stats = {
+        totalMazes: 0,
+        smallestSize: Infinity,
+        smallestName: "",
+        largestSize: 0,
+        largestName: "",
+        totalSize: 0,
+      };
+
+      // Load all mazes
+      async function loadAllMazes() {
+        const mazes = [];
+
+        for (const file of mazeFiles) {
+          try {
+            const response = await fetch(file);
+            if (!response.ok) {
+              console.warn(
+                `Failed to load ${file}: ${response.status} ${response.statusText}`
+              );
+              continue;
+            }
+
+            const mazeData = await response.json();
+            mazes.push({
+              path: file,
+              data: mazeData,
+            });
+
+            // Update statistics
+            const mazeSize = mazeData.width * mazeData.height;
+            stats.totalMazes++;
+            stats.totalSize += mazeSize;
+
+            if (mazeSize < stats.smallestSize) {
+              stats.smallestSize = mazeSize;
+              stats.smallestName = mazeData.name;
+            }
+
+            if (mazeSize > stats.largestSize) {
+              stats.largestSize = mazeSize;
+              stats.largestName = mazeData.name;
+            }
+          } catch (error) {
+            console.error(`Error loading ${file}:`, error);
+          }
+        }
+
+        return mazes;
+      }
+
+      // Create maze preview
+      function createMazePreview(maze) {
+        const container = document.createElement("div");
+        container.className = "maze-card";
+
+        const title = document.createElement("div");
+        title.className = "maze-title";
+        title.textContent = maze.data.name;
+        container.appendChild(title);
+
+        const info = document.createElement("div");
+        info.className = "maze-info";
+        info.textContent = `Size: ${maze.data.width}×${maze.data.height}, Exit: (${maze.data.exit.x},${maze.data.exit.y})`;
+        container.appendChild(info);
+
+        const preview = document.createElement("div");
+        preview.className = "maze-preview";
+        container.appendChild(preview);
+
+        // Check if layout is an array or "PROCEDURAL"
+        if (Array.isArray(maze.data.layout)) {
+          renderMazePreview(preview, maze.data);
+        } else {
+          preview.textContent =
+            "Procedural maze - Run generator script to see layout";
+          preview.style.display = "flex";
+          preview.style.justifyContent = "center";
+          preview.style.alignItems = "center";
+          preview.style.color = "#777";
+          preview.style.padding = "10px";
+          preview.style.textAlign = "center";
+        }
+
+        // Add test button
+        const button = document.createElement("button");
+        button.className = "test-button";
+        button.textContent = "TEST THIS MAZE";
+        button.addEventListener("click", () => {
+          // Store maze in localStorage for testing
+          localStorage.setItem("testMaze", JSON.stringify(maze.data));
+          window.open("index.html?testMaze=true", "_blank");
+        });
+        container.appendChild(button);
+
+        return container;
+      }
+
+      // Render maze preview
+      function renderMazePreview(container, mazeData) {
+        const width = mazeData.width;
+        const height = mazeData.height;
+        const layout = mazeData.layout;
+
+        // Calculate cell size
+        const containerWidth = 300;
+        const containerHeight = 200;
+        const cellSize = Math.min(
+          containerWidth / width,
+          containerHeight / height
+        );
+
+        // Create cells
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const cell = document.createElement("div");
+            cell.className = "maze-cell";
+            cell.style.width = `${cellSize}px`;
+            cell.style.height = `${cellSize}px`;
+            cell.style.left = `${x * cellSize}px`;
+            cell.style.top = `${y * cellSize}px`;
+
+            // Set color based on cell type
+            if (layout[y][x] === "#") {
+              cell.style.backgroundColor = "#fff";
+            } else if (layout[y][x] === "E") {
+              cell.style.backgroundColor = "#0f0";
+            } else if (
+              x === mazeData.playerStart.x &&
+              y === mazeData.playerStart.y
+            ) {
+              cell.style.backgroundColor = "#f00";
+            } else {
+              cell.style.backgroundColor = "#000";
+            }
+
+            container.appendChild(cell);
+          }
+        }
+      }
+
+      // Update statistics display
+      function updateStats() {
+        document.getElementById("totalMazes").textContent = stats.totalMazes;
+        document.getElementById("smallestMaze").textContent =
+          stats.smallestName;
+        document.getElementById("largestMaze").textContent = stats.largestName;
+        document.getElementById("averageSize").textContent =
+          stats.totalMazes > 0
+            ? Math.round(stats.totalSize / stats.totalMazes)
+            : "N/A";
+      }
+
+      // Initialize the tester
+      async function init() {
+        const mazes = await loadAllMazes();
+        const container = document.getElementById("mazeContainer");
+
+        // Sort mazes by size (small to large)
+        mazes.sort(
+          (a, b) => a.data.width * a.data.height - b.data.width * b.data.height
+        );
+
+        // Create previews
+        mazes.forEach((maze) => {
+          const preview = createMazePreview(maze);
+          container.appendChild(preview);
+        });
+
+        // Update statistics
+        updateStats();
+
+        // Hide loading indicator
+        document.getElementById("loading").style.display = "none";
+      }
+
+      // Start the application
+      window.onload = init;
+    </script>
+  </body>
+</html>

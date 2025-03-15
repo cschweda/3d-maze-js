@@ -1,55 +1,64 @@
-# TRS-80 Style 3D Maze Game
+# TRS-80 Style Maze Explorer
 
-A browser-based 3D maze generator and navigation game inspired by classic TRS-80 maze games from the early days of computing like Death Maze 5000 and Asylum. This project is built using pure JavaScript and HTML5 Canvas with no external dependencies.
+A retro-style 3D maze game inspired by the classic TRS-80 maze games from the early 1980s.
 
-![TRS-80 Style Maze](screenshot.png)
+## Features
 
-## Overview
-
-- **Procedural Maze Generation**: Uses a depth-first search algorithm with backtracking to create random mazes with exactly one solution path
-- **Pseudo-3D Rendering**: Creates the illusion of 3D using simple geometry and perspective techniques
-- **Smooth Animations**: Implements easing functions for fluid movement transitions
-- **Canvas-Based Rendering**: Utilizes HTML5 Canvas for both the main view and minimap
-- **Direction Vector Interpolation**: Provides smooth rotation transitions when turning
+- First-person 3D perspective rendered in HTML5 Canvas
+- Procedurally generated mazes with guaranteed solutions
+- Multiple pre-built maze designs with varying complexity
+- Visual maze map with current position indicator
+- Smooth animation for movement and turning
 
 ## How to Play
 
-- Use the **arrow keys** to navigate:
-  - **↑** Move forward
-  - **↓** Move backward
-  - **←** Turn left
-  - **→** Turn right
-- Find the exit (marked with a green "EXIT" sign)
-- Use the minimap to help orient yourself
-- The "Available paths" indicator shows which directions you can move
+1. Open `index.html` in a modern web browser
+2. Use arrow keys to navigate:
+   - ↑ (Up Arrow): Move forward
+   - ↓ (Down Arrow): Move backward
+   - ← (Left Arrow): Turn left
+   - → (Right Arrow): Turn right
+3. Find the exit marked in green
 
-## Installation and Setup
+## Testing Mazes
 
-No build process or dependencies required!
+You can use the Maze Tester to test all available mazes:
 
-1. Clone the repository:
+1. Open `maze_tester.html` in your browser
+2. Browse through the different maze options
+3. Click "TEST THIS MAZE" to load that specific maze in the game
 
-   ```
-   git clone https://github.com/yourusername/3d-maze-js.git
-   cd 3d-maze-js
-   ```
+### Generating the Huge Maze
 
-2. Open `index.html` in your browser:
-   - Directly open the file in your browser
-   - Or use a local server:
-     ```
-     npx serve
-     ```
-     (Requires Node.js to be installed)
+The huge maze (40x40) uses procedural generation. To generate its content:
 
-## Customization
-
-You can modify the maze size by changing the parameters in the constructor call at the end of the script:
-
-```javascript
-const game = new MazeGame(20, 20); // Width, Height
+```bash
+cd mazes
+node generate_huge_maze.js
 ```
+
+## Maze Types
+
+This project includes several maze types for testing different aspects of the game:
+
+1. **Tiny Maze (5×5)**: Quick testing of basic functionality
+2. **Small Maze (10×10)**: Simple navigation test
+3. **Medium Maze (15×15)**: Moderate complexity
+4. **Large Maze (25×25)**: Tests performance with larger mazes
+5. **Huge Maze (40×40)**: Stress test for performance
+6. **Spiral Maze (15×15)**: Special layout with a spiral pattern
+7. **Complex Maze (20×20)**: Many dead ends and complex paths
+8. **Simple Maze (12×12)**: Few dead ends, more straightforward
+9. **Multi-Exit Maze (18×18)**: Multiple exits for testing special cases
+
+## Contributing
+
+Feel free to contribute by:
+
+1. Creating new maze designs (add JSON files to the `mazes` directory)
+2. Improving the rendering algorithms
+3. Adding new features to enhance gameplay
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is open source and available under the MIT License.
