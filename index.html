@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>TRS-80 Style Maze</title>
+    <style>
+      body {
+        background-color: black;
+        color: white;
+        font-family: monospace;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        overflow: hidden;
+      }
+      #gameContainer {
+        display: flex;
+        flex-direction: column;
+        width: 640px;
+        border: 2px solid white;
+      }
+      #mazeView {
+        height: 400px;
+        background-color: black;
+        border-bottom: 2px solid white;
+      }
+      #minimapContainer {
+        margin-top: 20px;
+        text-align: center;
+      }
+      #minimap {
+        background-color: black;
+        border: 2px solid white;
+        margin-top: 10px;
+      }
+      #textArea {
+        height: 100px;
+        padding: 10px;
+        overflow-y: auto;
+      }
+      .info {
+        margin-top: 20px;
+        font-size: 14px;
+        text-align: center;
+      }
+      #exitsDisplay {
+        margin-top: 10px;
+        font-size: 16px;
+        background-color: black;
+        padding: 8px;
+        border: 1px solid #444;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="gameContainer">
+      <canvas id="mazeView" width="640" height="400"></canvas>
+      <div id="textArea">Welcome to the Maze. Use arrow keys to navigate.</div>
+    </div>
+
+    <div id="minimapContainer">
+      <div>MAZE MAP</div>
+      <canvas id="minimap" width="200" height="200"></canvas>
+      <div id="exitsDisplay">Checking exits...</div>
+    </div>
+
+    <div class="info">TRS-80 Style Maze Generator • Use arrow keys to move</div>
+
+    <script>
+      // Maze Generator and Game Logic
+      class MazeGame {
+        constructor(width, height) {
+          this.width = width;
+          this.height = height;
+          this.maze = this.generateMaze(width, height);
+          this.player = {
+            x: 1,
+            y: 1,
+            direction: 0, // 0 = North, 1 = East, 2 = South, 3 = West
+          };
+          this.exit = {
+            x: width - 2,
+            y: height - 2,
+          };
+          this.canvas = document.getElementById("mazeView");
+          this.ctx = this.canvas.getContext("2d");
+          this.minimapCanvas = document.getElementById("minimap");
+          this.minimapCtx = this.minimapCanvas.getContext("2d");
+          this.textArea = document.getElementById("textArea");
+          this.exitsDisplay = document.getElementById("exitsDisplay");
+
+          // Animation properties
+          this.isAnimating = false;
+          this.animationProgress = 0;
+          this.animationType = null; // 'move', 'turn-left', 'turn-right'
+          this.animationStartTime = 0;
+          this.animationDuration = 300; // milliseconds
+          this.lastFrameTime = 0;
+          this.targetX = 1;
+          this.targetY = 1;
+          this.startX = 1;
+          this.startY = 1;
+          this.startDirection = 0;
+          this.targetDirection = 0;
+
+          this.setupEventListeners();
+          this.render();
+        }
+
+        // Maze Generation using Depth-First Search
+        generateMaze(width, height) {
+          // Initialize maze with all walls
+          let maze = Array(height)
+            .fill()
+            .map(() => Array(width).fill("#"));
+
+          // Create a starting point
+          let startX = 1;
+          let startY = 1;
+          maze[startY][startX] = " ";
+
+          // DFS to create paths
+          const stack = [{ x: startX, y: startY }];
+
+          while (stack.length > 0) {
+            const current = stack[stack.length - 1];
+
+            // Check neighbors (up, right, down, left)
+            const neighbors = [];
+            const directions = [
+              { dx: 0, dy: -2 }, // Up
+              { dx: 2, dy: 0 }, // Right
+              { dx: 0, dy: 2 }, // Down
+              { dx: -2, dy: 0 }, // Left
+            ];
+
+            for (const dir of directions) {
+              const nx = current.x + dir.dx;
+              const ny = current.y + dir.dy;
+
+              // Check if neighbor is valid and unvisited
+              if (
+                nx > 0 &&
+                nx < width - 1 &&
+                ny > 0 &&
+                ny < height - 1 &&
+                maze[ny][nx] === "#"
+              ) {
+                neighbors.push({
+                  x: nx,
+                  y: ny,
+                  dx: dir.dx / 2,
+                  dy: dir.dy / 2,
+                });
+              }
+            }
+
+            if (neighbors.length > 0) {
+              // Choose a random neighbor
+              const next =
+                neighbors[Math.floor(Math.random() * neighbors.length)];
+
+              // Create path between current and next
+              maze[current.y + next.dy][current.x + next.dx] = " ";
+              maze[next.y][next.x] = " ";
+
+              // Push next cell to stack
+              stack.push({ x: next.x, y: next.y });
+            } else {
+              // Dead end, backtrack
+              stack.pop();
+            }
+          }
+
+          // Set exit
+          maze[height - 2][width - 2] = "E";
+
+          return maze;
+        }
+
+        // Handle key presses
+        setupEventListeners() {
+          document.addEventListener("keydown", (e) => {
+            // Only process new movement if not currently animating
+            if (!this.isAnimating) {
+              switch (e.key) {
+                case "ArrowUp":
+                  this.moveForward();
+                  break;
+                case "ArrowDown":
+                  this.moveBackward();
+                  break;
+                case "ArrowLeft":
+                  this.turnLeft();
+                  break;
+                case "ArrowRight":
+                  this.turnRight();
+                  break;
+              }
+            }
+          });
+
+          // Set up animation loop
+          requestAnimationFrame(this.animationLoop.bind(this));
+        }
+
+        // Animation loop
+        animationLoop(timestamp) {
+          // Calculate delta time
+          if (!this.lastFrameTime) this.lastFrameTime = timestamp;
+          const deltaTime = timestamp - this.lastFrameTime;
+          this.lastFrameTime = timestamp;
+
+          if (this.isAnimating) {
+            // Update animation progress
+            const elapsed = timestamp - this.animationStartTime;
+            this.animationProgress = Math.min(
+              elapsed / this.animationDuration,
+              1
+            );
+
+            // If animation is complete
+            if (this.animationProgress >= 1) {
+              this.isAnimating = false;
+              this.animationProgress = 0;
+
+              // Finalize the movement
+              if (this.animationType === "move") {
+                this.player.x = this.targetX;
+                this.player.y = this.targetY;
+              } else if (this.animationType.startsWith("turn")) {
+                this.player.direction = this.targetDirection;
+              }
+            }
+
+            this.render();
+          }
+
+          // Continue animation loop
+          requestAnimationFrame(this.animationLoop.bind(this));
+        }
+
+        // Start a new animation
+        startAnimation(type) {
+          this.isAnimating = true;
+          this.animationType = type;
+          this.animationStartTime = performance.now();
+          this.animationProgress = 0;
+        }
+
+        // Movement and turning functions
+        moveForward() {
+          const dx = [0, 1, 0, -1]; // Direction vectors
+          const dy = [-1, 0, 1, 0];
+
+          const newX = this.player.x + dx[this.player.direction];
+          const newY = this.player.y + dy[this.player.direction];
+
+          if (this.maze[newY][newX] !== "#") {
+            // Store start and target positions for animation
+            this.startX = this.player.x;
+            this.startY = this.player.y;
+            this.targetX = newX;
+            this.targetY = newY;
+
+            // Start the movement animation
+            this.startAnimation("move");
+
+            if (this.maze[newY][newX] === "E") {
+              this.textArea.innerHTML =
+                "Congratulations! You've reached the exit!";
+            } else {
+              this.textArea.innerHTML = "Moving forward...";
+            }
+          } else {
+            this.textArea.innerHTML = "You can't move through walls!";
+          }
+        }
+
+        moveBackward() {
+          const dx = [0, -1, 0, 1]; // Opposite direction vectors
+          const dy = [1, 0, -1, 0];
+
+          const newX = this.player.x + dx[this.player.direction];
+          const newY = this.player.y + dy[this.player.direction];
+
+          if (this.maze[newY][newX] !== "#") {
+            // Store start and target positions for animation
+            this.startX = this.player.x;
+            this.startY = this.player.y;
+            this.targetX = newX;
+            this.targetY = newY;
+
+            // Start the movement animation
+            this.startAnimation("move");
+
+            this.textArea.innerHTML = "Moving backward...";
+          } else {
+            this.textArea.innerHTML = "You can't move through walls!";
+          }
+        }
+
+        turnLeft() {
+          this.startDirection = this.player.direction;
+          this.targetDirection = (this.player.direction + 3) % 4;
+          this.startAnimation("turn-left");
+          this.textArea.innerHTML = "Turning left...";
+        }
+
+        turnRight() {
+          this.startDirection = this.player.direction;
+          this.targetDirection = (this.player.direction + 1) % 4;
+          this.startAnimation("turn-right");
+          this.textArea.innerHTML = "Turning right...";
+        }
+
+        // Get current interpolated position and direction for smooth animations
+        getCurrentPosition() {
+          if (!this.isAnimating) {
+            return {
+              x: this.player.x,
+              y: this.player.y,
+              direction: this.player.direction,
+            };
+          }
+
+          // Apply easing function for smoother movement
+          const easeProgress = this.easeInOutQuad(this.animationProgress);
+
+          if (this.animationType === "move") {
+            // Interpolate position
+            const x = this.startX + (this.targetX - this.startX) * easeProgress;
+            const y = this.startY + (this.targetY - this.startY) * easeProgress;
+            return {
+              x: x,
+              y: y,
+              direction: this.player.direction,
+            };
+          } else if (
+            this.animationType === "turn-left" ||
+            this.animationType === "turn-right"
+          ) {
+            // Calculate rotation interpolation
+            let directionDiff = this.targetDirection - this.startDirection;
+            if (this.animationType === "turn-left" && directionDiff > 0)
+              directionDiff -= 4;
+            if (this.animationType === "turn-right" && directionDiff < 0)
+              directionDiff += 4;
+
+            const currentDirection =
+              (this.startDirection + directionDiff * easeProgress) % 4;
+            return {
+              x: this.player.x,
+              y: this.player.y,
+              direction: currentDirection,
+            };
+          }
+
+          return {
+            x: this.player.x,
+            y: this.player.y,
+            direction: this.player.direction,
+          };
+        }
+
+        // Easing function for smoother animations
+        easeInOutQuad(t) {
+          return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        }
+
+        // Render the 3D view
+        render() {
+          // Clear the canvas
+          this.ctx.fillStyle = "black";
+          this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+          // Draw the first-person view
+          this.drawFirstPersonView();
+
+          // Draw the minimap
+          this.drawMiniMap();
+
+          // Update exits display
+          this.updateExitsDisplay();
+        }
+
+        // Check for available exits from the current position
+        checkAvailableExits() {
+          const currentPos = this.getCurrentPosition();
+          const x = Math.floor(currentPos.x);
+          const y = Math.floor(currentPos.y);
+          const exits = [];
+          const directions = ["North", "East", "South", "West"];
+          const dx = [0, 1, 0, -1];
+          const dy = [-1, 0, 1, 0];
+
+          for (let i = 0; i < 4; i++) {
+            const newX = x + dx[i];
+            const newY = y + dy[i];
+
+            if (!this.checkWall(newX, newY)) {
+              exits.push(directions[i]);
+              if (this.isExit(newX, newY)) {
+                exits[exits.length - 1] += " (EXIT)";
+              }
+            }
+          }
+
+          return exits;
+        }
+
+        // Update the exits display text
+        updateExitsDisplay() {
+          const exits = this.checkAvailableExits();
+          let exitsText = "Available paths: ";
+
+          if (exits.length === 0) {
+            exitsText += "None (you're trapped!)";
+          } else {
+            exitsText += exits.join(", ");
+          }
+
+          this.exitsDisplay.innerHTML = exitsText;
+
+          // Also display in the 3D view for easier reference
+          this.ctx.fillStyle = "white";
+          this.ctx.font = "14px monospace";
+          this.ctx.fillText("Exits: " + exits.join(", "), 20, 380);
+        }
+
+        // Draw the 3D view
+        drawFirstPersonView() {
+          const viewWidth = this.canvas.width;
+          const viewHeight = this.canvas.height;
+          const currentPos = this.getCurrentPosition();
+
+          // Direction vectors for checking walls
+          const dx = [0, 1, 0, -1]; // N, E, S, W
+          const dy = [-1, 0, 1, 0];
+
+          // Get the fractional direction for smooth turning
+          const directionInt = Math.floor(currentPos.direction);
+          const directionFrac = currentPos.direction - directionInt;
+
+          // Calculate direction vectors with interpolation for smooth turning
+          const directionX = this.interpolateDirection(
+            dx,
+            directionInt,
+            directionFrac
+          );
+          const directionY = this.interpolateDirection(
+            dy,
+            directionInt,
+            directionFrac
+          );
+
+          // Check what walls are visible from current position
+          const frontWall = this.checkWall(
+            Math.floor(currentPos.x + directionX),
+            Math.floor(currentPos.y + directionY)
+          );
+
+          const leftDir = (directionInt + 3) % 4;
+          const leftWall = this.checkWall(
+            Math.floor(currentPos.x + dx[leftDir]),
+            Math.floor(currentPos.y + dy[leftDir])
+          );
+
+          const rightDir = (directionInt + 1) % 4;
+          const rightWall = this.checkWall(
+            Math.floor(currentPos.x + dx[rightDir]),
+            Math.floor(currentPos.y + dy[rightDir])
+          );
+
+          // Draw floor and ceiling
+          this.drawFloorAndCeiling();
+
+          // Draw walls based on what's visible
+          if (frontWall) {
+            // Draw solid front wall
+            this.ctx.fillStyle = "#555555";
+            this.ctx.fillRect(100, 100, 440, 200);
+
+            // Wall outline
+            this.ctx.strokeStyle = "white";
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.rect(100, 100, 440, 200);
+            this.ctx.stroke();
+
+            // Exit sign if applicable
+            if (
+              this.isExit(
+                Math.floor(currentPos.x + directionX),
+                Math.floor(currentPos.y + directionY)
+              )
+            ) {
+              this.ctx.fillStyle = "green";
+              this.ctx.fillRect(290, 160, 60, 40);
+              this.ctx.fillStyle = "white";
+              this.ctx.font = "24px monospace";
+              this.ctx.fillText("EXIT", 290, 190);
+            }
+          } else {
+            // If there's no front wall, draw corridor
+
+            // Draw floor
+            this.ctx.fillStyle = "#333333";
+            this.ctx.beginPath();
+            this.ctx.moveTo(100, 300);
+            this.ctx.lineTo(540, 300);
+            this.ctx.lineTo(440, 250);
+            this.ctx.lineTo(200, 250);
+            this.ctx.closePath();
+            this.ctx.fill();
+
+            // Draw ceiling
+            this.ctx.fillStyle = "#222222";
+            this.ctx.beginPath();
+            this.ctx.moveTo(100, 100);
+            this.ctx.lineTo(540, 100);
+            this.ctx.lineTo(440, 150);
+            this.ctx.lineTo(200, 150);
+            this.ctx.closePath();
+            this.ctx.fill();
+
+            // Draw side walls
+            if (leftWall) {
+              // Solid left wall
+              this.ctx.fillStyle = "#444444";
+              this.ctx.beginPath();
+              this.ctx.moveTo(100, 100);
+              this.ctx.lineTo(200, 150);
+              this.ctx.lineTo(200, 250);
+              this.ctx.lineTo(100, 300);
+              this.ctx.closePath();
+              this.ctx.fill();
+
+              // Left wall outline
+              this.ctx.strokeStyle = "white";
+              this.ctx.lineWidth = 2;
+              this.ctx.beginPath();
+              this.ctx.moveTo(100, 100);
+              this.ctx.lineTo(200, 150);
+              this.ctx.lineTo(200, 250);
+              this.ctx.lineTo(100, 300);
+              this.ctx.closePath();
+              this.ctx.stroke();
+            }
+
+            if (rightWall) {
+              // Solid right wall
+              this.ctx.fillStyle = "#444444";
+              this.ctx.beginPath();
+              this.ctx.moveTo(540, 100);
+              this.ctx.lineTo(440, 150);
+              this.ctx.lineTo(440, 250);
+              this.ctx.lineTo(540, 300);
+              this.ctx.closePath();
+              this.ctx.fill();
+
+              // Right wall outline
+              this.ctx.strokeStyle = "white";
+              this.ctx.lineWidth = 2;
+              this.ctx.beginPath();
+              this.ctx.moveTo(540, 100);
+              this.ctx.lineTo(440, 150);
+              this.ctx.lineTo(440, 250);
+              this.ctx.lineTo(540, 300);
+              this.ctx.closePath();
+              this.ctx.stroke();
+            }
+
+            // Draw second level depth if no front wall
+            const front2X = Math.floor(currentPos.x + 2 * directionX);
+            const front2Y = Math.floor(currentPos.y + 2 * directionY);
+
+            if (this.isInBounds(front2X, front2Y)) {
+              const frontWall2 = this.checkWall(front2X, front2Y);
+
+              if (frontWall2) {
+                // Draw far front wall (solid)
+                this.ctx.fillStyle = "#333333";
+                this.ctx.beginPath();
+                this.ctx.moveTo(200, 150);
+                this.ctx.lineTo(440, 150);
+                this.ctx.lineTo(440, 250);
+                this.ctx.lineTo(200, 250);
+                this.ctx.closePath();
+                this.ctx.fill();
+
+                // Wall outline
+                this.ctx.strokeStyle = "white";
+                this.ctx.lineWidth = 1;
+                this.ctx.beginPath();
+                this.ctx.rect(200, 150, 240, 100);
+                this.ctx.stroke();
+
+                // Exit sign if applicable
+                if (this.isExit(front2X, front2Y)) {
+                  this.ctx.fillStyle = "green";
+                  this.ctx.fillRect(305, 180, 30, 20);
+                  this.ctx.fillStyle = "white";
+                  this.ctx.font = "16px monospace";
+                  this.ctx.fillText("EXIT", 305, 195);
+                }
+              } else {
+                // Draw distant floor
+                this.ctx.fillStyle = "#222222";
+                this.ctx.beginPath();
+                this.ctx.moveTo(200, 250);
+                this.ctx.lineTo(440, 250);
+                this.ctx.lineTo(320, 280);
+                this.ctx.lineTo(320, 280);
+                this.ctx.closePath();
+                this.ctx.fill();
+
+                // Draw distant ceiling
+                this.ctx.fillStyle = "#111111";
+                this.ctx.beginPath();
+                this.ctx.moveTo(200, 150);
+                this.ctx.lineTo(440, 150);
+                this.ctx.lineTo(320, 120);
+                this.ctx.lineTo(320, 120);
+                this.ctx.closePath();
+                this.ctx.fill();
+              }
+
+              // Draw corner walls
+              const leftCornerDir = (directionInt + 3) % 4;
+              const leftCornerWall = this.checkWall(
+                Math.floor(currentPos.x + directionX + dx[leftCornerDir]),
+                Math.floor(currentPos.y + directionY + dy[leftCornerDir])
+              );
+
+              const rightCornerDir = (directionInt + 1) % 4;
+              const rightCornerWall = this.checkWall(
+                Math.floor(currentPos.x + directionX + dx[rightCornerDir]),
+                Math.floor(currentPos.y + directionY + dy[rightCornerDir])
+              );
+
+              // Draw corner walls if needed
+              if (leftCornerWall) {
+                this.ctx.fillStyle = "#3a3a3a";
+                this.ctx.beginPath();
+                this.ctx.moveTo(200, 150);
+                this.ctx.lineTo(200, 250);
+                this.ctx.closePath();
+                this.ctx.stroke();
+              }
+
+              if (rightCornerWall) {
+                this.ctx.fillStyle = "#3a3a3a";
+                this.ctx.beginPath();
+                this.ctx.moveTo(440, 150);
+                this.ctx.lineTo(440, 250);
+                this.ctx.closePath();
+                this.ctx.stroke();
+              }
+            }
+          }
+        }
+
+        // Draw floor and ceiling background
+        drawFloorAndCeiling() {
+          // Floor (bottom half)
+          this.ctx.fillStyle = "#111111";
+          this.ctx.fillRect(0, 200, this.canvas.width, 200);
+
+          // Ceiling (top half)
+          this.ctx.fillStyle = "#000000";
+          this.ctx.fillRect(0, 0, this.canvas.width, 200);
+
+          // Add perspective grid lines to floor
+          this.ctx.strokeStyle = "#333333";
+          this.ctx.lineWidth = 1;
+          for (let i = 0; i < 5; i++) {
+            const y = 200 + i * 40;
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, y);
+            this.ctx.lineTo(this.canvas.width, y);
+            this.ctx.stroke();
+          }
+        }
+
+        // Interpolate between direction vectors for smooth turning
+        interpolateDirection(dirArray, dirIndex, fraction) {
+          if (fraction === 0) return dirArray[dirIndex];
+
+          const nextIndex = (dirIndex + 1) % 4;
+          return (
+            dirArray[dirIndex] * (1 - fraction) + dirArray[nextIndex] * fraction
+          );
+        }
+
+        // Helper function to check if a cell contains a wall
+        checkWall(x, y) {
+          if (!this.isInBounds(x, y)) return true;
+          return this.maze[y][x] === "#";
+        }
+
+        // Helper function to check if a cell is the exit
+        isExit(x, y) {
+          if (!this.isInBounds(x, y)) return false;
+          return this.maze[y][x] === "E";
+        }
+
+        // Helper function to check if coordinates are within the maze bounds
+        isInBounds(x, y) {
+          return x >= 0 && x < this.width && y >= 0 && y < this.height;
+        }
+
+        // Draw a minimap
+        drawMiniMap() {
+          const mapSize = 200;
+          const cellSize = 10; // Larger cell size for better visibility
+          const currentPos = this.getCurrentPosition();
+
+          // Clear the minimap canvas
+          this.minimapCtx.fillStyle = "black";
+          this.minimapCtx.fillRect(0, 0, mapSize, mapSize);
+
+          // Draw maze cells
+          for (let y = 0; y < this.height; y++) {
+            for (let x = 0; x < this.width; x++) {
+              if (this.maze[y][x] === "#") {
+                this.minimapCtx.fillStyle = "white";
+                this.minimapCtx.fillRect(
+                  x * cellSize,
+                  y * cellSize,
+                  cellSize,
+                  cellSize
+                );
+              } else if (this.maze[y][x] === "E") {
+                this.minimapCtx.fillStyle = "green";
+                this.minimapCtx.fillRect(
+                  x * cellSize,
+                  y * cellSize,
+                  cellSize,
+                  cellSize
+                );
+              } else if (
+                x === Math.floor(currentPos.x) &&
+                y === Math.floor(currentPos.y)
+              ) {
+                // Highlight the current path
+                this.minimapCtx.fillStyle = "#444";
+                this.minimapCtx.fillRect(
+                  x * cellSize,
+                  y * cellSize,
+                  cellSize,
+                  cellSize
+                );
+              }
+            }
+          }
+
+          // Draw player as a directional triangle
+          const directionInt = Math.floor(currentPos.direction);
+          const directionFrac = currentPos.direction - directionInt;
+
+          const dx = [0, 1, 0, -1]; // N, E, S, W
+          const dy = [-1, 0, 1, 0];
+
+          const directionX = this.interpolateDirection(
+            dx,
+            directionInt,
+            directionFrac
+          );
+          const directionY = this.interpolateDirection(
+            dy,
+            directionInt,
+            directionFrac
+          );
+
+          // Draw a triangle to represent the player and direction
+          const triangleSize = cellSize * 0.9; // Size of the triangle
+          const centerX = currentPos.x * cellSize + cellSize / 2;
+          const centerY = currentPos.y * cellSize + cellSize / 2;
+
+          // Calculate triangle points
+          const frontX = centerX + directionX * triangleSize;
+          const frontY = centerY + directionY * triangleSize;
+
+          // Calculate perpendicular vector for the base of the triangle
+          const perpX = -directionY;
+          const perpY = directionX;
+
+          // Calculate back corners of the triangle
+          const backLeftX =
+            centerX -
+            (directionX * triangleSize) / 3 +
+            (perpX * triangleSize) / 2;
+          const backLeftY =
+            centerY -
+            (directionY * triangleSize) / 3 +
+            (perpY * triangleSize) / 2;
+          const backRightX =
+            centerX -
+            (directionX * triangleSize) / 3 -
+            (perpX * triangleSize) / 2;
+          const backRightY =
+            centerY -
+            (directionY * triangleSize) / 3 -
+            (perpY * triangleSize) / 2;
+
+          // Draw filled triangle
+          this.minimapCtx.fillStyle = "red";
+          this.minimapCtx.beginPath();
+          this.minimapCtx.moveTo(frontX, frontY);
+          this.minimapCtx.lineTo(backLeftX, backLeftY);
+          this.minimapCtx.lineTo(backRightX, backRightY);
+          this.minimapCtx.closePath();
+          this.minimapCtx.fill();
+
+          // Add white outline to make it stand out more
+          this.minimapCtx.strokeStyle = "white";
+          this.minimapCtx.lineWidth = 1;
+          this.minimapCtx.stroke();
+
+          // Add legend with larger text
+          this.minimapCtx.font = "12px monospace";
+          this.minimapCtx.fillStyle = "white";
+          this.minimapCtx.fillText("■ Wall", 5, mapSize - 35);
+          this.minimapCtx.fillStyle = "green";
+          this.minimapCtx.fillText("■ Exit", 5, mapSize - 20);
+
+          // Draw triangle symbol in legend
+          this.minimapCtx.fillStyle = "red";
+          this.minimapCtx.beginPath();
+          this.minimapCtx.moveTo(80, mapSize - 35);
+          this.minimapCtx.lineTo(70, mapSize - 25);
+          this.minimapCtx.lineTo(90, mapSize - 25);
+          this.minimapCtx.closePath();
+          this.minimapCtx.fill();
+
+          this.minimapCtx.fillStyle = "white";
+          this.minimapCtx.fillText("Player", 95, mapSize - 28);
+
+          // Display current coordinates
+          this.minimapCtx.fillStyle = "white";
+          this.minimapCtx.fillText(
+            `Position: (${Math.floor(currentPos.x)},${Math.floor(
+              currentPos.y
+            )})`,
+            5,
+            mapSize - 5
+          );
+        }
+      }
+
+      // Create and start the game when the page loads
+      window.onload = function () {
+        const game = new MazeGame(20, 20);
+      };
+    </script>
+  </body>
+</html>
